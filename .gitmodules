@@ -1,0 +1,6 @@
+[submodule "limap"]
+	path = limap
+	url = https://github.com/cvg/limap
+[submodule "colmap"]
+	path = colmap
+	url = https://github.com/colmap/colmap
