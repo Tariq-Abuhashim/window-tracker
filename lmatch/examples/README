@@ -1,0 +1,10 @@
+
+Download data from:
+https://cmp.felk.cvut.cz/~werner/software/lmatch/
+
+Reference:
+https://www.robots.ox.ac.uk/~vgg/publications/1997/Schmid97/schmid97.pdf
+
+Other references:
+https://github.com/richdu/Line-Matching-Across-Views/tree/master
+https://www.robots.ox.ac.uk/~vgg/practicals/instance-recognition/index.html

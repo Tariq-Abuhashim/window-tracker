@@ -1,0 +1,92 @@
+usecuda11_4
+sudo apt-get install \
+    git \
+    cmake \
+    build-essential \
+    libboost-program-options-dev \
+    libboost-filesystem-dev \
+    libboost-graph-dev \
+    libboost-regex-dev \
+    libboost-system-dev \
+    libboost-test-dev \
+    libeigen3-dev \
+    libsuitesparse-dev \
+    libfreeimage-dev \
+    libgoogle-glog-dev \
+    libgflags-dev \
+    libglew-dev \
+    qtbase5-dev \
+    libqt5opengl5-dev \
+    libcgal-dev
+
+sudo apt install libatlas-base-dev libsuitesparse-dev
+sudo apt install libceres-dev
+sudo apt install libmetis-dev
+sudo apt install libhdf5-dev
+
+# GCC 9.1 minimum needed
+#sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+#sudo apt update
+#sudo apt-get install gcc-9 g++-9
+##Once installed, you may need to configure the alternatives system to use GCC 9.1 as the default compiler:
+#sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 90
+#sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 90
+##Then, select GCC 9.1 as the default compiler:
+#sudo update-alternatives --config gcc
+#sudo update-alternatives --config g++
+
+conda deactivate
+
+git clone https://github.com/colmap/colmap
+git checkout 3.8
+mkdir build && cd build
+cmake -DCMAKE_CUDA_ARCHITECTURES="75" ..
+make -j4
+
+git clone --recursive https://github.com/vlarsson/PoseLib.git
+cd PoseLib
+mkdir build && cd build
+cmake ..
+sudo make install -j8
+
+conda create -n limap python=3.9 cudatoolkit=11.4
+conda activate limap 
+
+#install torch 
+conda install astunparse numpy ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses
+git clone -b v1.12.0 https://github.com/pytorch/pytorch
+cd pytorch
+export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
+python setup.py install
+
+#install torchvision
+git clone -b v0.13.0 https://github.com/pytorch/vision.git
+cd vision
+python setup.py install
+
+# OpenCV needs to be compiled also with cuda 11.4
+
+git clone https://github.com/cvg/limap.git
+cd limap
+git submodule update --init --recursive
+cd third-party/TP-LSD/tp_lsd/modeling
+rm -r DCNv2/
+git clone https://github.com/lucasjinreal/DCNv2_latest.git DCNv2
+cd ../../../../
+python -m pip install -r requirements.txt
+python -m pip install -Ive . 
+
+
+##### issues
+## wrong Hierarchical-Localization
+cd thirdparty/Hierarchical-Localization/
+git checkout -b v1.4
+git submodule update --init --recursive
+## wrong GlueStick
+
+
+##### How to run limap
+python runners/colmap_triangulation.py -c /home/mrt/dev/window_tracker/limap/cfgs/triangulation/default_fast.yaml -a /home/mrt/dev/window_tracker/data/DJI/ --output_dir /home/mrt/dev/window_tracker/data/DJI/
+
+##### How to view the lines
+python visualize_3d_lines.py --input_dir /home/mrt/dev/window_tracker/data/DJI/finaltracks/

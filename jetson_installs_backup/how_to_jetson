@@ -1,0 +1,45 @@
+######### how to play with Jetson on host machine:
+
+
+push Jetson to recovery mode (if need to flash)
+- start with the Jetson Orin AGX devkit turned off and disconnected from the power supply.
+- get the USB-A to USB-C cable and connect the USB-A end to your host computer and the USB-C end to the Orin type C port L.
+- press and hold the FORCE RECOVERY button (middle button).
+- while pressing the FORCE RECOVERY button, press and release the RESET button (first on right)
+
+
+$lsusb
+Bus 001 Device 011: ID 0955:7023 NVidia Corp
+
+
+how to flash
+start SDKManager while jetson in recovery mode
+when reaching STEP 3,  new window with "SDK Manager is about to flash your Jetson AGX Orin module"  will show up
+
+######### how to find out jetson ip address from host machine?
+
+- identify the Network Interface
+$ip addr
+
+33: enp0s20f0u11u2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UNKNOWN group default qlen 1000
+    link/ether 42:0f:9e:c4:c9:a8 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.55.100/24 brd 192.168.55.255 scope global dynamic noprefixroute enp0s20f0u11u2
+       valid_lft 13sec preferred_lft 13sec
+    inet6 fe80::f5a4:b286:d54b:2285/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+
+- scan subnet
+  This should list all devices in the 192.168.55.x subnet, and hopefully, you should be able to see your Jetson device in this list. 
+  The IP address corresponding to the Jetson device should be different from the 192.168.55.100, which is the IP of the interface on your laptop in this subnet.
+
+$sudo apt-get update && sudo apt-get install arp-scan
+$sudo arp-scan --interface=enp0s20f0u11u2 --localnet
+
+Interface: enp0s20f0u11u2, datalink type: EN10MB (Ethernet)
+Starting arp-scan 1.9 with 256 hosts (http://www.nta-monitor.com/tools/arp-scan/)
+192.168.55.1	92:5f:7b:ae:ef:f9	(Unknown)
+
+1 packets received by filter, 0 packets dropped by kernel
+Ending arp-scan 1.9: 256 hosts scanned in 2.609 seconds (98.12 hosts/sec). 1 responded
+
+$ ssh -X dv@192.168.55.1
