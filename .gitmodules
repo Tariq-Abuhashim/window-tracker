@@ -4,3 +4,6 @@
 [submodule "colmap"]
 	path = colmap
 	url = https://github.com/colmap/colmap
+[submodule "detr"]
+	path = detr
+	url = https://gitlab.com/missionsystems/hyperteaming/detr
