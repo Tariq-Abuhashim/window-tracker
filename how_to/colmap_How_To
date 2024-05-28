@@ -1,2 +1,42 @@
-cd build
-./src/exe/colmap gui
+
+$ conda deactivate
+
+$ usecuda11_4
+
+$ sudo apt-get install \
+    git \
+    cmake \
+    build-essential \
+    libboost-program-options-dev \
+    libboost-filesystem-dev \
+    libboost-graph-dev \
+    libboost-regex-dev \
+    libboost-system-dev \
+    libboost-test-dev \
+    libeigen3-dev \
+    libsuitesparse-dev \
+    libfreeimage-dev \
+    libgoogle-glog-dev \
+    libgflags-dev \
+    libglew-dev \
+    qtbase5-dev \
+    libqt5opengl5-dev \
+    libcgal-dev
+
+$ sudo apt install libatlas-base-dev libsuitesparse-dev
+$ sudo apt install libceres-dev
+$ sudo apt install libmetis-dev
+$ sudo apt install libhdf5-dev
+
+$ git clone https://github.com/colmap/colmap
+$ cd colmap
+$ git checkout 3.8
+$ mkdir build && cd build
+$ cmake -DCMAKE_CUDA_ARCHITECTURES="75" ..
+$ make -j8
+$ sudo make install
+
+## USAGE
+
+$ cd build
+$ ./src/exe/colmap gui
