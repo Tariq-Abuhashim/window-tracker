@@ -1,6 +1,9 @@
 # widnow_tracker
 
-<img src="https://gitlab.com/missionsystems/hyperteaming/window-tracker/-/blob/master/media/Screenshot_2024-05-06_10-09-09.png" align="center" height="350" width="600"/>
+<p align='center'>
+    <img src="media/lines.png" alt="drawing" width="600"/>
+    <img src="media/normals.png" alt="drawing" width="600"/>
+</p>
 
 ## Getting started
 
