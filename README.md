@@ -1,8 +1,8 @@
 # widnow_tracker
 
 <p align='center'>
-    <img src="media/lines.png" alt="drawing" width="550"/>
-    <img src="media/normals.png" alt="drawing" width="490"/>
+    <img src="media/lines.png" alt="drawing" width="500"/>
+    <img src="media/normals.png" alt="drawing" width="440"/>
 </p>
 
 ## Description
