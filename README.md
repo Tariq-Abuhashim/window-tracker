@@ -13,7 +13,7 @@ This is the window global normal computation code. The code present in this repo
 3- Track windows in image frames using a combination of 2D line tracks, 2D bounding box detections and heuristics.    
 4- Using all accommulated line tracks per window object, it computes the normal direction and window centroid.  
 
-Main dependencies include: 
+Main dependencies include:   
 1- COLMAP (https://github.com/colmap/colmap).  
 2- PoseLib (https://github.com/PoseLib/PoseLib).  
 3- ORBSLAM3 (https://github.com/UZ-SLAMLab/ORB_SLAM3).  
