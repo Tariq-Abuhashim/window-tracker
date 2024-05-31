@@ -7,7 +7,19 @@
 
 ## Description
 
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+This is the window global normal computation code. The code present in this repository performs the following tasks:  
+1- Build a 3D line sketch using all image frames, poses and 3D points from either COLMAP or ORBSLAM3.  
+2- Detect windows using DETR.
+3- Track windows in image frames using a combination of 2D line tracks, 2D bounding box detections and heuristics.  
+4- Using all accommulated line tracks per window object, it computes the normal direction and window centroid.
+
+Main dependencies include: 
+1- COLMAP (https://github.com/colmap/colmap).
+2- PoseLib (https://github.com/PoseLib/PoseLib).
+3- ORBSLAM3 (https://github.com/UZ-SLAMLab/ORB_SLAM3).
+4- DETR (https://gitlab.com/missionsystems/hyperteaming/detr).
+Depending on if either COLMAP or ORBSLAM3 are used, some of these dependencies can be ignored.
+
 
 ## Getting started
 
