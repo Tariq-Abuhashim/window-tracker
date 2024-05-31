@@ -18,7 +18,7 @@ Main dependencies include:
 2- PoseLib (https://github.com/PoseLib/PoseLib).  
 3- ORBSLAM3 (https://github.com/UZ-SLAMLab/ORB_SLAM3).  
 4- DETR (https://gitlab.com/missionsystems/hyperteaming/detr).  
-Depending on if either COLMAP or ORBSLAM3 are used, some of these dependencies can be ignored.  
+Depending on whether COLMAP or ORBSLAM3 is used, some of these dependencies can be ignored.   
 
 
 ## Getting started
