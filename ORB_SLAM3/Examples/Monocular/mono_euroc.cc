@@ -40,7 +40,19 @@ int main(int argc, char **argv)
 {  
     if(argc < 5)
     {
-        cerr << endl << "Usage: ./mono_euroc path_to_vocabulary path_to_settings path_to_sequence_folder_1 path_to_times_file_1 (path_to_image_folder_2 path_to_times_file_2 ... path_to_image_folder_N path_to_times_file_N) (trajectory_file_name)" << endl;
+        cerr << endl << "Usage: \n"
+                     "./mono_euroc \\ \n"
+                     "  path_to_vocabulary path_to_settings \\ \n"
+                     "  path_to_sequence_folder_1 path_to_times_file_1 \\ \n"
+                     "  path_to_sequence_folder_2 path_to_times_file_2 \\ \n"
+                     "  path_to_sequence_folder_N path_to_times_file_N \\ \n"
+                     "  trajectory_file_name (optional)" << endl;
+		cerr << endl << "Example: \n" 
+                     "./mono_euroc \\ \n"
+          			 "  Vocabulary/ORBvoc.txt \\ \n"
+          			 "  Examples/Monocular/vulcan.yaml \\ \n"
+          			 "  /home/mrt/dev/mission-systems/images_from_bins/images/ /home/mrt/dev/mission-systems/images_from_bins/times.txt" << endl;
+		cerr << endl;
         return 1;
     }
 
@@ -222,8 +234,9 @@ int main(int argc, char **argv)
 
 void LoadImages(const string &strImagePath, const string &strPathTimes,
                 vector<string> &vstrImages, vector<double> &vTimeStamps)
-{
-    ifstream fTimes;
+{   
+	std::cout << std::endl << strImagePath << std::endl;
+	ifstream fTimes;
     fTimes.open(strPathTimes.c_str());
     vTimeStamps.reserve(5000);
     vstrImages.reserve(5000);
@@ -236,10 +249,10 @@ void LoadImages(const string &strImagePath, const string &strPathTimes,
             stringstream ss;
             ss << s;
             vstrImages.push_back(strImagePath + "/" + ss.str() + ".png");
+			std::cout << std::endl << strImagePath + "/" + ss.str() + ".png" << std::endl; 
             double t;
             ss >> t;
             vTimeStamps.push_back(t*1e-6);  // 9 for EuroC,  3 for Vulcan
-
         }
     }
 }
