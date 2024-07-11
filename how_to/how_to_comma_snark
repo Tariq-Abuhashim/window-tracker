@@ -1,0 +1,18 @@
+compile comma:
+mkdir build && cd build 
+CXXFLAGS="-fpermissive" cmake -DCMAKE_CXX_STANDARD=14 ..
+make -j4
+sudo make install
+
+compile snark:
+sudo apt install qt3d5-dev
+sudo apt install libqt5charts5-dev
+mkdir build && cd build
+cmake ..
+make -j4
+
+
+git add <files>
+git commit -m <message>
+git fetch
+git rebase /origin/master

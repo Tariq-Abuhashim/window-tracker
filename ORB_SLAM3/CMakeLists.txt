@@ -111,7 +111,8 @@ include/GeometricTools.h
 include/TwoViewReconstruction.h
 include/SerializationUtils.h
 include/Config.h
-include/Settings.h)
+include/Settings.h
+include/tcp_interface.hpp)
 
 add_subdirectory(Thirdparty/g2o)
 
@@ -123,6 +124,16 @@ ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
 ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
 -lboost_serialization
 -lcrypto
+-lboost_system   # Mission systems
+-lpthread   # Mission systems
+-lncurses   # for Jetson
+-lncursesw   # for Jetson
+-lffi   # for Jetson
+snark_imaging   # Mission systems
+snark_ouster  # Mission systems
+comma_csv  # Mission systems
+comma_string  # Mission systems
+comma_xpath  # Mission systems
 )
 
 # If RealSense SDK is found the library is added and its examples compiled
@@ -145,9 +156,17 @@ add_executable(mono_euroc
         Examples/Monocular/mono_euroc.cc)
 target_link_libraries(mono_euroc ${PROJECT_NAME})
 
+add_executable(mono_vulcan
+        Examples/Monocular/mono_vulcan.cc)
+target_link_libraries(mono_vulcan ${PROJECT_NAME})
+
 #Monocular inertial examples
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Monocular-Inertial)
 
 add_executable(mono_inertial_euroc
         Examples/Monocular-Inertial/mono_inertial_euroc.cc)
 target_link_libraries(mono_inertial_euroc ${PROJECT_NAME})
+
+add_executable(mono_inertial_vulcan
+        Examples/Monocular-Inertial/mono_inertial_vulcan.cc)
+target_link_libraries(mono_inertial_vulcan ${PROJECT_NAME})

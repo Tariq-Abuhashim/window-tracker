@@ -1,4 +1,5 @@
-
+import sys
+sys.path.append("limap")
 import limap.base as _base
 import limap.util.io as limapio
 import limap.visualize as limapvis
@@ -65,8 +66,11 @@ class LineTracker:
         return np.hstack((R, t))
 
     def get_intrinsic_matrix(self, img_id):
-        camview = self.imagecols.camview(img_id)
-        K = np.array(camview.K())
-        return K[0,0], K[1,1], K[0,2], K[1,2]
+        if self.imagecols.exist_cam(img_id):
+           camview = self.imagecols.camview(img_id)
+           K = np.array(camview.K())
+           return K[0,0], K[1,1], K[0,2], K[1,2]
+        else:
+           return None
         
 

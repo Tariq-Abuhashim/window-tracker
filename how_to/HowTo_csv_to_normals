@@ -1,0 +1,35 @@
+********
+# Run the image data
+cd /media/mrt/Whale/data/mission_systems/2024_05_30_07_auto_orbit
+format=t,3ui,s[7062528]
+cat cameras/alvium_1800_c507c/*.bin | csv-play --binary $format --slow 1 | io-publish tcp:4001 --size $( echo $format | csv-format size )
+
+********
+# Run the imu data
+cd /media/mrt/Whale/data/mission_systems/2024_05_30_07_auto_orbit
+format=$( ms-log-multitool data --include advanced-navigation --output-format )
+cat advanced-navigation/20240530T014736.691279.bin | ms-log-multitool data --include advanced-navigation | csv-play --binary $format --slow 1 | io-publish tcp:4002 --size $( echo $format | csv-format size )
+
+********
+# Run SLAM
+# update ORB_SLAM3/Examples/Monocular/vulcan.yaml with intrinsics
+cd /home/mrt/dev/mission-systems/window-tracker/ORB_SLAM3/
+./Examples/Monocular/mono_vulcan \
+    Vocabulary/ORBvoc.txt \
+    Examples/Monocular/vulcan.yaml
+
+********
+# Run limap
+cd /home/mrt/dev/mission-systems/window-tracker/limap/
+conda activate limap
+export DATA_DIR=/home/mrt/dev/mission-systems/images_from_bins/
+python runners/colmap_triangulation.py -c cfgs/triangulation/default_fast.yaml -a ${DATA_DIR} --output_dir ${DATA_DIR}
+
+********
+# Check the lines
+python visualize_3d_lines.py --input_dir ${DATA_DIR}/finaltracks/
+
+********
+# get normals from tracks
+cd /home/mrt/dev/mission-systems/window-tracker/
+python3 get_windows.py

@@ -1,0 +1,50 @@
+********
+# Run the image data
+cd /media/mrt/Whale/data/mission_systems/2024_05_30_07_auto_orbit
+format=t,3ui,s[7062528]
+cat cameras/alvium_1800_c507c/*.bin | csv-play --binary $format --slow 1 | io-publish tcp:4001 --size $( echo $format | csv-format size )
+
+********
+# Run the image converter
+cd /home/mrt/dev/mission-systems/images_from_bins/
+./image_from_bin
+
+********
+# Run the image sampler
+
+********
+# Repair red channel
+cd /home/mrt/dev/mission-systems/repair-red/
+python3 repair_images.py
+
+********
+# Run COLMAP on a subset of images to get intrinsics
+cd /home/mrt/dev/mission-systems/colmap/build/
+./src/exe/colmap gui
+# export the model as text files, then check intrinsics in cameras.txt
+
+********
+# Run SLAM
+# update ORB_SLAM3/Examples/Monocular/vulcan.yaml with intrinsics
+cd /home/mrt/dev/mission-systems/window-tracker/ORB_SLAM3/
+./Examples/Monocular/mono_euroc \
+    Vocabulary/ORBvoc.txt \
+    Examples/Monocular/vulcan.yaml \
+    /home/mrt/dev/mission-systems/images_from_bins/images/ \
+    /home/mrt/dev/mission-systems/images_from_bins/times.txt
+
+********
+# Run limap
+cd /home/mrt/dev/mission-systems/window-tracker/limap/
+conda activate limap
+export DATA_DIR=/media/mrt/Whale/data/mission-systems/DJI_longest/
+python runners/colmap_triangulation.py -c cfgs/triangulation/default_fast.yaml -a ${DATA_DIR} --output_dir ${DATA_DIR}
+
+********
+# Check the lines
+python visualize_3d_lines.py --input_dir ${DATA_DIR}/finaltracks/
+
+********
+# get normals from tracks
+cd /home/mrt/dev/mission-systems/window-tracker/
+python3 get_windows.py

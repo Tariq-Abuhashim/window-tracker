@@ -30,11 +30,11 @@ $ cd third-party/TP-LSD/tp_lsd/modeling
 $ rm -r DCNv2/
 $ git clone https://github.com/lucasjinreal/DCNv2_latest.git DCNv2
 $ cd ../../../../
+$ usecuda11_4
 $ python -m pip install -r requirements.txt
 $ cd build && cmake ..
-$ make -j8
+$ make -j4
 $ python -m pip install -Ive . 
-
 
 ##### issues
 ## wrong Hierarchical-Localization
@@ -42,7 +42,6 @@ $ cd thirdparty/Hierarchical-Localization/
 $ git checkout -b v1.4
 $ git submodule update --init --recursive
 ## wrong GlueStick
-
 
 ##### How to run limap
 $ python runners/colmap_triangulation.py -c /home/mrt/dev/window_tracker/limap/cfgs/triangulation/default_fast.yaml -a /home/mrt/dev/window_tracker/data/DJI/ --output_dir /home/mrt/dev/window_tracker/data/DJI/

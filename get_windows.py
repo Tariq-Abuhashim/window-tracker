@@ -1,43 +1,26 @@
 #
 import os, sys
+import argparse
 import cv2
 import glob
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-
+import torchvision.transforms as T
 import open3d as o3d
-
-import numpy as np
 from sklearn.linear_model import RANSACRegressor
 
+DEBUG=False
 
-# conda activate detr
-# cd /home/mrt/dev/limap/
-# python setup.py build
-# python setup.py install
+#sys.path.append("../detr/src/ros1_rtr8")
+#from detect_trt import TensorRTInference
 
-sys.path.append("limap")
-from line_tracker import LineTracker
+sys.path.append("../detr/src")
+from infer_engine import TensorRTInference
 
-sys.path.append("detr")
-from detect_trt import TensorRTInference
 from window_tracker import Window, WindowTracker
-
-import torchvision.transforms as T
-
-transform = T.Compose([
-            T.Resize(900)
-        ])
-
-class Args:
-    def __init__(self):
-        self.data_dir = 'detr/data/dunster/'
-        self.output_dir = 'detr/data/dunster/outputs/'
-        self.limap_dir = 'limap/'
-        self.detr_dir = 'detr/'
-
+from line_tracker import LineTracker
 
 def data_loader(src_directory):
     dataset = []
@@ -126,9 +109,9 @@ def check_line_box(bbox, line):
         ((b1[0], b2[1]), b1)   # Left side
     ]
 
-    #for box_line in box_lines:
-    #    if get_intersection(l1, l2, box_line[0], box_line[1]):
-    #        return True
+    for box_line in box_lines:
+        if get_intersection(l1, l2, box_line[0], box_line[1]):
+            return True
 
     return False
 
@@ -449,52 +432,58 @@ def main(args):
     all_estimated_normals = {}
 
     # Initialise TensorRTInference with the tensorRT model
-    trt_inference = TensorRTInference('detr/detr.trt')
+    trt_inference = TensorRTInference(args.engine, 1) #num_classes=1
     print("Detector Ready ...")
 
     # Initialise LineTracker
-    line_tracker = LineTracker('/media/mrt/Whale/data/mission_systems/window_tracker/data/DJI/finaltracks/')
+    line_tracker = LineTracker(args.work_dir+'/finaltracks/')
     print("Line Ready ...")
 
     # Initialise WindowTracker with desired tracking method
-    window_tracker = WindowTracker("iou", None)  # or "edges" for edge-line-based tracking
-    print("Tracker Ready ...")
-
-    # Load the dataset
-    #dataset = data_loader(args.data_dir)
-    #print("Data Loaded !!!!")
-    #for image_path, camera_path in dataset:
-        #I = cv2.imread(image_path)
-        #P = np.loadtxt(camera_path)
-        #print("Image shape:", I.shape)
-        #print("Camera parameters shape:", P.shape
+    #window_tracker = WindowTracker("iou", None)  # or "edges" for edge-line-based tracking
+    #print("Tracker Ready ...")
     
     window_counter = 0;
     num_images = line_tracker.get_number_of_images()
     num_tracks = line_tracker.get_num_tracks()
 
-    for image_id in range(31, num_images):
-        print(line_tracker.get_intrinsic_matrix(image_id))
+    # Check the camera intrinsics (colmap each image is camera, slam 1 camera)
+    for image_id in range(1, num_images):
+        K = line_tracker.get_intrinsic_matrix(image_id)
+        if K is not None:
+            print(line_tracker.get_intrinsic_matrix(image_id))
 
     for image_id in range(1, num_images):
 
         print(f'Keyframe {image_id}')
 
         # Get an image
-        # original size is 3840x2160x3
-        # limap is using 1600x900x3  (scale=2.4, which can be adjusted in the config files)
-        # Onnx model is using 1422x800x3 (scale=2.7)
+        # for DJI dataset:
+        #    original	3840x2160x3
+        #    limap		3770x2120x3  (average undistorted)
+        #    Onnx model	1422x800 x3
+        # for Vulcan dataset:
+        #    original	1936x1216x3
+        #    limap		1911x1200x3  (average undistorted)
+        #    Onnx model	1274x800 x3
         image_path = line_tracker.get_image_name(image_id)
-        #print(image_path)
+        if DEBUG:
+            print(image_path)
         current_image = cv2.imread(image_path)
+        if current_image is None:
+            continue
         h, w, c = current_image.shape
-        size = w*h
-        if size!=23977200: #1440000: # resize to match limap
-            current_image = cv2.resize(current_image, (3770, 2120))#(1600, 900)) # resize it to match limap size
-        #print(current_image.shape)
+        #size = w*h
+        #if size!=23977200: #1440000: # resize to regulate size variations in limap undistorted images
+        if h != args.limap_h or w != args.limap_w:
+            current_image = cv2.resize(current_image, (args.limap_w, args.limap_h))
+        if DEBUG:
+            print(current_image.shape)
+        #print(f"{h}x{w}x{c}")
 
         # Detect windows
-        probas, bboxes = trt_inference.detect(current_image) # TODO link this to window detector
+        #probas, bboxes = trt_inference.detect(current_image) # TODO link this to window detector
+        probas, bboxes = trt_inference.infer(current_image)
         detected_windows = [Window(bbox) for prob, bbox in zip(probas, bboxes) if np.argmax(prob) == 1] #FIXME # 3-for car,person, window,   1-for window only
         print(f'    number of detections {len(detected_windows)}')
 
@@ -508,11 +497,10 @@ def main(args):
         # Check track in window
         for detection in detected_windows:
             lines_in_current_detection = []
-            #print('-------')
             for track_id in range(1, num_tracks): # equivalent to [1:num_tracks+1)
     
                 # Check 3d line length
-                if (line_tracker.linetracks[track_id].line.length()>2):  # FIXME reject long lines
+                if (line_tracker.linetracks[track_id].line.length()>20):  # FIXME reject long lines
                    continue
 
                 # Detect 2D lines
@@ -521,15 +509,22 @@ def main(args):
                 if line2d is None:
                     continue
                 line2d_array = line2d.as_array()
+                #print(line2d_array)
 
                 if check_line_box(detection.bounding_box, line2d_array):
                     lines_in_current_detection.append(track_id)
-                    #(x1, y1), (x2, y2) = line2d_array
-                    #cv2.line(current_image,(int(x1), int(y1)), (int(x2), int(y2)),(255,0,0),3)
+                    if DEBUG:
+                        (x1, y1), (x2, y2) = line2d_array
+                        cv2.line(current_image,(int(x1), int(y1)), (int(x2), int(y2)),(0,0,255),3)
+                else:
+                    if DEBUG:
+                        (x1, y1), (x2, y2) = line2d_array
+                        cv2.line(current_image,(int(x1), int(y1)), (int(x2), int(y2)),(255,0,0),3)
+            if DEBUG:
+                print(f'    number of supporting lines = {len(lines_in_current_detection)}')
 
-            #print(f'    number of supporting lines = {len(lines_in_current_detection)}')
-
-            if len(lines_in_current_detection)>2: #3
+            window_id='x'
+            if len(lines_in_current_detection)>3: #3
                 #print(lines_in_current_detection)
                 window_id = find_3d_line_in_windows(lines_in_current_detection)
 
@@ -546,41 +541,20 @@ def main(args):
                     window_id = window_counter
                     add_lines_to_window(window_id, lines_in_current_detection, image_id)
 
-                #x1, y1, x2, y2 = detection.bounding_box
-                #cv2.rectangle(current_image,(int(x1), int(y1)), (int(x2), int(y2)),(255,0,0),3)
-                #text = f"{window_id}"
-                #text_x = int(x1)
-                #text_y = int(y2) + 20  # 20 pixels below the bottom of the rectangle
-                #cv2.putText(current_image, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 1)
+            if DEBUG: #note that this will only display bounding boxes with 2d lines available
+                x1, y1, x2, y2 = detection.bounding_box
+                cv2.rectangle(current_image,(int(x1), int(y1)), (int(x2), int(y2)),(255,0,0),3)
+                text = f"{window_id}"
+                text_x = int(x1)
+                text_y = int(y2) + 20  # 20 pixels below the bottom of the rectangle
+                cv2.putText(current_image, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 1)
 
-        #current_image = cv2.resize(current_image, (1600, 900))
-        #cv2.imshow('image', current_image)
-        #cv2.moveWindow('image', 2001, 100)
-        #cv2.waitKey(0)
-        #cv2.destroyAllWindows()
-
-    #print('-----------')
-    #for window_id in windows:
-    #    print(windows[window_id]['3d_lines'])
-  
-    #print('-----------')
-    #for track_id in line_to_window_map:
-    #    print(f'track {track_id} for window {line_to_window_map[track_id]}')
-
-    #all_points = []
-    #for track_id in range(1, num_tracks):
-    #    line = line_tracker.get_3d_line(track_id)
-    #    start_point, end_point = line
-    #    sampled_points = sample_points_on_line(np.array(start_point), np.array(end_point), 10)
-    #    all_points.extend(sampled_points)
-    #pcd = o3d.geometry.PointCloud()
-    #pcd.points = o3d.utility.Vector3dVector(all_points)
-    #pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=10))
-    ##pcd.orient_normals_towards_camera_location(camera_location=np.array([0, 0, 0]))
-    #scale_factor = .01  # Adjust this factor to increase or decrease the length of the normals
-    #pcd.normals = o3d.utility.Vector3dVector(np.asarray(pcd.normals) * scale_factor)
-    #o3d.visualization.draw_geometries([pcd], point_show_normal=True)
-    #return
+        if DEBUG:
+            current_image = cv2.resize(current_image, (1600, 900))
+            cv2.imshow('image', current_image)
+            cv2.moveWindow('image', 2001, 100)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
 
     # Initialize visualizer
     vis = o3d.visualization.Visualizer()
@@ -588,10 +562,6 @@ def main(args):
     num_samples_per_line = 20
     for window_id, window_data in windows.items():
         center, normal, lines = compute_normals(window_id, line_tracker)  # Ensure this function returns correct values
-
-        # Visualize the normals
-        #arrow = create_arrow(center, normal)
-        #vis.add_geometry(arrow)
 
         # Visualize the lines
         line_set = create_line_set(lines, np.random.rand(3))  # Blue color for lines
@@ -610,13 +580,6 @@ def main(args):
         
         # Estimate normals for the point cloud
         pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=10))
-        #pcd.orient_normals_consistent_tangent_plane(k=10)
-        ##pcd.orient_normals_towards_camera_location(camera_location=np.array([0, 0, 0]))
-        ##o3d.visualization.draw_geometries([pcd], point_show_normal=True)
-
-        # Visualize the point cloud with normals
-        #pcd.paint_uniform_color([0, 0, 1])  # Blue color for the point cloud
-        #vis.add_geometry(pcd)
 
         # Calculate the mean normal
         normals = np.asarray(pcd.normals)
@@ -635,79 +598,37 @@ def main(args):
         arrow.transform(transform)
         arrow.paint_uniform_color([1, 0, 0])  # Red color for the normal
         vis.add_geometry(arrow)
-
-        # Visualize normals as arrows
-        # Assuming pcd is your point cloud
-        #normals = np.asarray(pcd.normals)
-        #points = np.asarray(pcd.points)
-        #arrows = [o3d.geometry.TriangleMesh.create_arrow(cylinder_radius=0.001, cone_radius=0.005, cylinder_height=0.05, cone_height=0.025) for _ in range(len(points))]
-
-        #for arrow, point, normal in zip(arrows, points, normals):
-        #    # Create rotation matrix from z-axis to normal vector
-        #    R = rotation_matrix_from_vectors(np.array([0, 0, 1]), normal)
-        #    transform = np.eye(4)
-        #    transform[:3, :3] = R
-        #    transform[:3, 3] = point  # Set the translation to the point location
-        #    arrow.transform(transform)
-        #    arrow.paint_uniform_color([1, 0, 0])  # Color the arrow red
-        #    vis.add_geometry(arrow)
-        
-        # Create and add the plane mesh
-        #mesh = create_plane_mesh(normal, center, 0.1)  # Adjust scale as needed
-        #mesh.paint_uniform_color([0.5, 0.5, 0.5])  # Grey color for the plane
-        #mesh.compute_vertex_normals()
-        #mesh.orient_triangles()
-        #additional_triangles = [tri[::-1] for tri in mesh.triangles]
-        #mesh.triangles = o3d.utility.Vector3iVector(list(mesh.triangles) + additional_triangles)
-        #vis.add_geometry(mesh)
       
     # Run the visualizer
     vis.run()
     vis.destroy_window()
 
-        #for prob, bbox in detected_windows:
-        #    x_min, y_min, x_max, y_max = bbox
-        #    confidence = float(np.max(prob))
-        #    class_label = str(trt_inference.CLASSES[np.argmax(prob)])
-        #    print(f"{class_label}, {confidence}, {x_min}, {y_min}, {x_max}, {y_max}")
-    
-        # Track and assign IDs to windows across images
-        #tracked_windows = window_tracker.track_and_assign_ids(detected_windows, P) # TODO add pose
+    # delete objects to avoid memory segmentation fault
+    trt_inference.cleanup()
 
-        ## Estimate depth
-        #depth_map = estimate_depth(image) # TODO link to depth estimator
+class Args:
+    def __init__(self):
+        self.data_dir = 'detr/data/dunster/'
+        self.output_dir = 'detr/data/dunster/outputs/'
+        self.limap_dir = 'limap/'
+        self.detr_dir = 'detr/'
 
-        #for window in tracked_windows:
-        #    # Estimate initial normals for each window
-        #    initial_normals = estimate_normals_from_depth(depth_map, window) # TODO
+    @staticmethod
+    def parse_args():
+        parser = argparse.ArgumentParser(description='Tracks windows in images and computes their normals.')
+        parser.add_argument('work_dir', type=str, help='Directory containing images with missing red channel')
+        parser.add_argument('--engine', type=str, default='../detr/src/window.engine', help='Path to the trained model file')
+        parser.add_argument('--limap_h', type=int, default=2120, help='Image height after undistort')
+        parser.add_argument('--limap_w', type=int, default=3770, help='Image width after undistort')
+        return parser.parse_args()
 
-        #    # Initialize list for this window ID if not already present
-        #    if window.id not in all_estimated_normals:
-        #        all_estimated_normals[window.id] = []
+if __name__ == "__main__":
+    inargs = Args.parse_args()
 
-        #    # Store initial normals
-        #    all_estimated_normals[window.id].append(initial_normals)
-
-            ## If using multiple images for the same scene ( sliding window, maybe keyframe based optimsisation? )
-            #if multiple_images_available:
-            #    # 3D Reconstruction
-            #    model_3D = reconstruct_3D_scene(multiple_images)
-            #    projected_window = project_to_3D(window, model_3D)
-            #    # Refine the normals using 3D data
-            #    refined_normal = refine_normal_estimate(projected_window, model_3D, initial_normals)
-            #    all_estimated_normals[window.id][-1] = refined_normal  # Update with refined normal
-
-    ## Aggregate and refine results across all images
-    #final_normals = {}
-    #for window_id, normals_list in all_estimated_normals.items():
-    #    # Aggregate and refine normals for each window across all images
-    #    final_normals[window_id] = aggregate_and_refine_normals(normals_list)
-
-    # 'final_normals' now contains the most accurate normal estimates for each tracked window
-
-
-if __name__ == '__main__':
     args = Args()
-    if args.output_dir:
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    args.work_dir = inargs.work_dir
+    args.engine = inargs.engine
+    args.limap_h = inargs.limap_h
+    args.limap_w = inargs.limap_w
+    
     main(args)
