@@ -38,7 +38,7 @@
 namespace ORB_SLAM3
 {
 
-Verbose::eLevel Verbose::th = Verbose::VERBOSITY_NORMAL;
+Verbose::eLevel Verbose::th = Verbose::VERBOSITY_NORMAL; // VERBOSITY_NORMAL, VERBOSITY_DEBUG
 
 System::System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor,
                const bool bUseViewer, const int initFr, const string &strSequence):
@@ -239,7 +239,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     }
 
     // Fix verbosity
-    Verbose::SetTh(Verbose::VERBOSITY_QUIET);
+    Verbose::SetTh(Verbose::VERBOSITY_DEBUG);
 
 }
 
@@ -1308,8 +1308,8 @@ void System::WriteCamerasText(const std::string& path) const {
     line.precision(17);
 	line << pCamera->GetId()+1 << " "; // ORBSLAM starts from 0, COLMAP starts from 1
 	line << cTypes[pCamera->GetType()] << " ";
-	line << 3840 << " ";
-	line << 2160 << " ";
+	line << 3840 << " ";  // vulcan 1936, DJI 3840
+	line << 2160 << " "; // vulcan 1216, DJI 2160
     for (int i; i<pCamera->size(); i++){ // size() returns number of parameters
 		line << pCamera->getParameter(i) << " ";
 	}
@@ -1319,7 +1319,7 @@ void System::WriteCamerasText(const std::string& path) const {
 
 	file << line_string << std::endl;
 
-/* // if there is more than 1 camera, need to loop keyframes
+/* // for multiple cameras, we have to loop keyframes
 	for (KeyFrame* pKF : vpKFs) {
         if (!pKF || pKF->isBad())
             continue;
@@ -1425,8 +1425,8 @@ void System::WriteImagesText(const string& path) {
 
 	int count = 0;
 	for (KeyFrame* pKF : vpKFs) {
-        if (!pKF || pKF->isBad())
-            continue;
+        //if (!pKF || pKF->isBad()) //FIXME I commented this out
+        //    continue;
 		count++;
 	}
 	
@@ -1444,8 +1444,8 @@ void System::WriteImagesText(const string& path) {
        //<< ComputeMeanObservationsPerRegImage() << std::endl;
 
 	for (KeyFrame* pKF : vpKFs) {
-        if (!pKF || pKF->isBad())
-            continue;
+        //if (!pKF || pKF->isBad()) //FIXME I commented this out
+        //    continue;
 
 		Eigen::Quaternionf q;
         Eigen::Vector3f t;
@@ -1461,6 +1461,10 @@ void System::WriteImagesText(const string& path) {
 			Sophus::SE3f Tcolmap = orb2colmap2(Tcw);
             q = Tcolmap.unit_quaternion();
             t = Tcolmap.translation();
+
+			//Sophus::SE3f Twc = pKF->GetPoseInverse();
+            //q = Twc.unit_quaternion();
+            //t = Twc.translation();
         }
 
 		std::ostringstream line;
@@ -1486,10 +1490,11 @@ void System::WriteImagesText(const string& path) {
 		std::ostringstream ss;
     	// Convert timestamp to microseconds, cast to long long, and format with leading zeros
 		const int totalDigits = 12;  // euroc (19), dji (12)
-		long long timestamp_ns = static_cast<long long>(pKF->mTimeStamp * 1e6);  // euroc (1e9), dji (1e6)
+		long long timestamp_ns = static_cast<long long>(pKF->mTimeStamp * 1e6);  // euroc (1e9), dji and vulcan (1e6)
        	//ss << std::fixed << std::setprecision(0) << std::setfill('0') << std::setw(totalDigits) << timestamp_ns;
 
-    	ss << std::fixed << std::setprecision(0) << "0" << pKF->mTimeStamp * 1e6;
+    	ss << std::fixed << std::setprecision(0) << "0" << pKF->mTimeStamp * 1e6; // DJI needs 0
+		//ss << std::fixed << std::setprecision(0) << pKF->mTimeStamp * 1e6;
 
 		line << ss.str() << ".png";
 
@@ -1591,8 +1596,8 @@ void System::WritePoints3DText(const std::string& path) const {
 		for(map<KeyFrame*, tuple<int,int>>::iterator mit=obs.begin(), mend=obs.end(); mit!=mend; mit++)
     	{
         	KeyFrame* pKF = mit->first;
-			if (!pKF || pKF->isBad())
-				continue;
+			//if (!pKF || pKF->isBad()) //FIXME I commented this out
+			//	continue;
 
         	int leftIndex = get<0>(mit -> second), rightIndex = get<1>(mit -> second);
         	//if(leftIndex != -1){

@@ -1825,7 +1825,7 @@ void Tracking::Track()
             CreateMapInAtlas();
             return;
         }
-        else if(mCurrentFrame.mTimeStamp>mLastFrame.mTimeStamp+1.0)
+        else if(mCurrentFrame.mTimeStamp>mLastFrame.mTimeStamp+1.0) // was 1.0
         {
             // cout << mCurrentFrame.mTimeStamp << ", " << mLastFrame.mTimeStamp << endl;
             // cout << "id last: " << mLastFrame.mnId << "    id curr: " << mCurrentFrame.mnId << endl;
@@ -1851,7 +1851,6 @@ void Tracking::Track()
                 }
                 return;
             }
-
         }
     }
 
@@ -2246,7 +2245,7 @@ void Tracking::Track()
             // Check if we need to insert a new keyframe
             // if(bNeedKF && bOK)
             if(bNeedKF && (bOK || (mInsertKFsLost && mState==RECENTLY_LOST &&
-                                   (mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD))))
+            (mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD))))
                 CreateNewKeyFrame();
 
 #ifdef REGISTER_TIMES
@@ -2579,7 +2578,7 @@ void Tracking::CreateInitialMapMonocular()
     Verbose::PrintMess("New Map created with " + to_string(mpAtlas->MapPointsInMap()) + " points", Verbose::VERBOSITY_QUIET);
     Optimizer::GlobalBundleAdjustemnt(mpAtlas->GetCurrentMap(),20);
 
-    float medianDepth = pKFini->ComputeSceneMedianDepth(2);
+    float medianDepth = pKFini->ComputeSceneMedianDepth(2);   // FIXME I set this to 60
     float invMedianDepth;
     if(mSensor == System::IMU_MONOCULAR)
         invMedianDepth = 4.0f/medianDepth; // 4.0f
@@ -2724,7 +2723,7 @@ bool Tracking::TrackReferenceKeyFrame()
 
     // We perform first an ORB matching with the reference keyframe
     // If enough matches are found we setup a PnP solver
-    ORBmatcher matcher(0.7,true);
+    ORBmatcher matcher(0.7,true); // was 0.7
     vector<MapPoint*> vpMapPointMatches;
 
     int nmatches = matcher.SearchByBoW(mpReferenceKF,mCurrentFrame,vpMapPointMatches);
@@ -2870,9 +2869,6 @@ bool Tracking::TrackWithMotionModel()
         mCurrentFrame.SetPose(mVelocity * mLastFrame.GetPose());
     }
 
-
-
-
     fill(mCurrentFrame.mvpMapPoints.begin(),mCurrentFrame.mvpMapPoints.end(),static_cast<MapPoint*>(NULL));
 
     // Project points seen in previous frame
@@ -3001,6 +2997,8 @@ bool Tracking::TrackLocalMap()
                 aux2++;
         }
 
+	// Optimize Pose
+	Optimizer::PoseOptimization(&mCurrentFrame); // Tariq
     mnMatchesInliers = 0;
 
     // Update MapPoints Statistics
@@ -3027,7 +3025,7 @@ bool Tracking::TrackLocalMap()
     // Decide if the tracking was succesful
     // More restrictive if there was a relocalization recently
     mpLocalMapper->mnMatchesInliers=mnMatchesInliers;
-    if(mCurrentFrame.mnId<mnLastRelocFrameId+mMaxFrames && mnMatchesInliers<50)
+    if(mCurrentFrame.mnId<mnLastRelocFrameId+mMaxFrames && mnMatchesInliers<50) // was 50
         return false;
 
     if((mnMatchesInliers>10)&&(mState==RECENTLY_LOST))
@@ -3036,7 +3034,7 @@ bool Tracking::TrackLocalMap()
 
     if (mSensor == System::IMU_MONOCULAR)
     {
-        if((mnMatchesInliers<15 && mpAtlas->isImuInitialized())||(mnMatchesInliers<50 && !mpAtlas->isImuInitialized()))
+        if((mnMatchesInliers<15 && mpAtlas->isImuInitialized())||(mnMatchesInliers<50 && !mpAtlas->isImuInitialized())) // 15  25
         {
             return false;
         }
@@ -3054,7 +3052,7 @@ bool Tracking::TrackLocalMap()
     }
     else
     {
-        if(mnMatchesInliers<30)
+        if(mnMatchesInliers<30) // was 30
             return false;
         else
             return true;
@@ -3124,7 +3122,7 @@ bool Tracking::NeedNewKeyFrame()
     }
 
     bool bNeedToInsertClose;
-    bNeedToInsertClose = (nTrackedClose<100) && (nNonTrackedClose>70);
+    bNeedToInsertClose = (nTrackedClose<100) && (nNonTrackedClose>70); // was 100 and 70
 
     // Thresholds
     float thRefRatio = 0.75f;
@@ -3151,6 +3149,12 @@ bool Tracking::NeedNewKeyFrame()
         else
             thRefRatio = 0.90f;
     }
+
+    //cout << "mnLastKeyFrameId   " << mnLastKeyFrameId << endl;
+    //cout << "thRefRatio 		" << thRefRatio << endl;
+    //cout << "nRefMatches: 		" << nRefMatches << endl;
+	//cout << "mnMatchesInliers: 	" << mnMatchesInliers << endl;
+	//cout << "mMinFrames:        " << mMinFrames << endl;
 
     // Condition 1a: More than "MaxFrames" have passed from last keyframe insertion
     const bool c1a = mCurrentFrame.mnId>=mnLastKeyFrameId+mMaxFrames;

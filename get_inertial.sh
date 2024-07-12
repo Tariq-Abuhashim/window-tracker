@@ -1,11 +1,11 @@
 #!/bin/bash
 
-export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024_05_30_03_auto_orbit/
+export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/
 export WORKSPACE=$DATASET_PATH/orbslam
-export IMU=$DATASET_PATH/orbslam/imu
+export IMU_PATH=$DATASET_PATH/orbslam/imu0
 
 mkdir -p $WORKSPACE
-mkdir -p $IMU
+mkdir -p $IMU_PATH
 
 export nav_port=4002
 
