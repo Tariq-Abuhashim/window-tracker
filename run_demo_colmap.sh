@@ -1,43 +1,100 @@
 #!/bin/bash
 
-# DJI-     original 3840x2160, rectified 3770x2120, build model using 1422x800
-# Vulcan-  original 1936x1216, rectified 1911x1200, build model using 1273x800
+# DJI-     original 3840x2160, undistorted 3770x2120, build model using 1422x800
+# Vulcan-  original 1936x1216, undistorted 1911x1200, build model using 1273x800
 
-#export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/
+# Vulcan :
+# Save Images/Times/dt/data to disk
+# ./run_camera.sh
+# ./get_frames.sh
+# Save geo-referenced images/Times/dt to disk
+# ./run_nav.sh
+# ./get_nav_image.sh
+#
+export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/
 #export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024_05_30_03_auto_orbit/
-export DATASET_PATH=$PWD/data/DJI_78
-export WORKSPACE=$DATASET_PATH
+export WORKSPACE=$DATASET_PATH/colmap
+export MAX_DIMS=1936
+export LIMAP_W=1911
+export LIMAP_H=1200
 
+# DJI :
+#export DATASET_PATH=$PWD/data/DJI_153
+#export WORKSPACE=$DATASET_PATH
+#export MAX_DIMS=3840
+#export LIMAP_W=3770
+#export LIMAP_H=2120
+
+# models and parameters
 export ENGINE=../detr/src/window.engine
 export LIMAP_CONFIG=cfgs/triangulation/default_fast.yaml # this is relative to limap
-export MAX_DIMS=3840 # DJI-3840, Vulcan-1936
 
 mkdir -p $WORKSPACE
 
 run_colmap=true
-run_limap=true
+run_limap=false
 
 # Run COLMAP
 cd ../colmap/build/
 #colmap automatic_reconstructor --image_path ${IMAGES} --workspace_path ${WORKSPACE}
 # export the model as text files, then check intrinsics in cameras.txt
 if [ "$run_colmap" = true ]; then
+    # 0.183 seconds
 	colmap feature_extractor \
 	   --database_path $WORKSPACE/database.db \
-	   --image_path $DATASET_PATH/images
+	   --image_path $WORKSPACE/images
 
+    # 5.900 minutes
 	colmap exhaustive_matcher \
-	   --database_path $WORKSPACE/database.db
+       --database_path $WORKSPACE/database.db
 
-	mkdir $WORKSPACE/sparse
+    # x-right, y-forward, z-up
+    cd ../../window-tracker 
+    python3 update_colmap.py \
+       --db_path $WORKSPACE/database.db \
+       --gps_data_file $WORKSPACE/nav/data.txt 
+    cd ../colmap/build/
 
-	colmap mapper \
-	   --database_path $WORKSPACE/database.db \
-	   --image_path $DATASET_PATH/images \
-	   --output_path $WORKSPACE/sparse
+    # x-right, y-backward, z-down
+    cd ../../window-tracker
+    python3 visualise_colmap_database.py \
+       --db_path $WORKSPACE/database.db
+    cd ../colmap/build/
+ 
+    # Check if database has been updated
+    #sqlite3 $WORKSPACE/database.db
+    #.headers on
+    #.mode column
+    #SELECT image_id, name, prior_tx, prior_ty, prior_tz, prior_qw, prior_qx, prior_qy, prior_qz FROM images;
+    #SELECT image_id, name, tx, ty, tz, qw, qx, qy, qz FROM images;
 
-	mv $WORKSPACE/sparse/0/* $WORKSPACE/sparse
-    rm -r $WORKSPACE/sparse/0
+	#mkdir $WORKSPACE/sparse
+
+	#colmap mapper \
+	#   --database_path $WORKSPACE/database.db \
+	#   --image_path $WORKSPACE/images \
+	#   --output_path $WORKSPACE/sparse
+    #   --Mapper.priors_path $WORKSPACE/nav/data.txt
+
+    #mkdir $WORKSPACE/sparse/geo-registered-model
+
+	#colmap model_aligner \
+    #   --input_path $WORKSPACE/sparse/0 \
+    #   --output_path $WORKSPACE/sparse/geo-registered-model \
+    #   --ref_images_path $WORKSPACE/nav/data.txt \
+    #   --ref_is_gps 1 \
+    #   --alignment_type ecef \
+    #   --robust_alignment 1 \
+    #   --robust_alignment_max_error 3.0 #(where 3.0 is the error threshold to be used in RANSAC)
+
+    #mv $WORKSPACE/sparse/0/* $WORKSPACE/sparse
+    #rm -r $WORKSPACE/sparse/0
+
+    #colmap model_converter \
+    #  --input_path $WORKSPACE/sparse/0 \
+    #  --output_path $WORKSPACE/sparse \
+    #  --output_type TXT
+	
 fi
 
 # Run LIMAP
@@ -46,11 +103,16 @@ source /home/mrt/anaconda3/etc/profile.d/conda.sh
 conda activate limap
 if [ "$run_limap" = true ]; then
 	python3 runners/colmap_triangulation.py -c $LIMAP_CONFIG -a $WORKSPACE --output_dir $WORKSPACE --max_image_dim $MAX_DIMS
-	python3 visualize_3d_lines.py --input_dir $WORKSPACE/finaltracks/
+	python3 visualize_3d_lines.py \
+            --input_dir $WORKSPACE/finaltracks/ \
+            --imagecols $WORKSPACE/imagecols.npy \
+            --use_robust_ranges
+            #--metainfos $WORKSPACE/metainfos
 fi
 
 # Track windows and compute normals
 # TODO output window data to disk (location+normal)
-cd ../
-python3 get_windows.py $WORKSPACE --limap_w=3770 --limap_h=2120 --engine=$ENGINE  # Rectified image dimensions: 1911x1200 Vulcan, 3770x2120 DJI
+#cd ../
+#python3 get_windows.py $WORKSPACE --limap_w=$LIMAP_W --limap_h=$LIMAP_H --engine=$ENGINE  # Rectified image dimensions: 1911x1200 Vulcan, 3770x2120 DJI
+
 echo Done ...

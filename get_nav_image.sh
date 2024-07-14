@@ -1,8 +1,8 @@
 #!/bin/bash
 
 export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/
-export WORKSPACE=$DATASET_PATH/orbslam
-export NAV=$DATASET_PATH/orbslam/nav
+export WORKSPACE=$DATASET_PATH/colmap
+export NAV=$DATASET_PATH/colmap/nav
 
 mkdir -p $WORKSPACE
 mkdir -p $NAV

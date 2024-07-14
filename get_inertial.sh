@@ -2,7 +2,7 @@
 
 export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/
 export WORKSPACE=$DATASET_PATH/orbslam
-export IMU_PATH=$DATASET_PATH/orbslam/imu0
+export IMU_PATH=$DATASET_PATH/orbslam/imu
 
 mkdir -p $WORKSPACE
 mkdir -p $IMU_PATH
