@@ -4,16 +4,14 @@
 # Vulcan-  original 1936x1216, undistorted 1911x1200, build model using 1273x800
 
 # Vulcan :
-# Save Images/Times/dt/data to disk
-# ./run_camera.sh
-# ./get_frames.sh
 # Save geo-referenced images/Times/dt to disk
+# ./run_camera.sh
 # ./run_nav.sh
 # ./get_nav_image.sh
 #
 export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/
 #export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024_05_30_03_auto_orbit/
-export WORKSPACE=$DATASET_PATH/colmap
+export WORKSPACE=$DATASET_PATH/colmap_down
 export MAX_DIMS=1936
 export LIMAP_W=1911
 export LIMAP_H=1200
@@ -33,33 +31,36 @@ mkdir -p $WORKSPACE
 
 run_colmap=true
 run_limap=false
+run_tracking=false
 
 # Run COLMAP
-cd ../colmap/build/
+#cd ../colmap/build/
 #colmap automatic_reconstructor --image_path ${IMAGES} --workspace_path ${WORKSPACE}
 # export the model as text files, then check intrinsics in cameras.txt
 if [ "$run_colmap" = true ]; then
-    # 0.183 seconds
+    # 0.183 minutes
 	colmap feature_extractor \
-	   --database_path $WORKSPACE/database.db \
-	   --image_path $WORKSPACE/images
+	   	--database_path $WORKSPACE/database.db \
+	   	--image_path $WORKSPACE/images
 
     # 5.900 minutes
 	colmap exhaustive_matcher \
-       --database_path $WORKSPACE/database.db
+       	--database_path $WORKSPACE/database.db
 
-    # x-right, y-forward, z-up
-    cd ../../window-tracker 
+    # x-right, y-forward, z-up (UTM - meters)
+    #cd ../../window-tracker 
     python3 update_colmap.py \
-       --db_path $WORKSPACE/database.db \
-       --gps_data_file $WORKSPACE/nav/data.txt 
-    cd ../colmap/build/
+       	--db_path $WORKSPACE/database.db \
+       	--gps_data_file $WORKSPACE/nav/data.txt 
+    #cd ../colmap/build/
 
-    # x-right, y-backward, z-down
-    cd ../../window-tracker
+    # UTM to camera transform
+
+    # x-right, y-backward, z-down (COLMAP frame - meters)
+    #cd ../../window-tracker
     python3 visualise_colmap_database.py \
-       --db_path $WORKSPACE/database.db
-    cd ../colmap/build/
+       	--db_path $WORKSPACE/database.db
+    #cd ../colmap/build/
  
     # Check if database has been updated
     #sqlite3 $WORKSPACE/database.db
@@ -68,37 +69,40 @@ if [ "$run_colmap" = true ]; then
     #SELECT image_id, name, prior_tx, prior_ty, prior_tz, prior_qw, prior_qx, prior_qy, prior_qz FROM images;
     #SELECT image_id, name, tx, ty, tz, qw, qx, qy, qz FROM images;
 
-	#mkdir $WORKSPACE/sparse
+	mkdir $WORKSPACE/sparse
 
-	#colmap mapper \
-	#   --database_path $WORKSPACE/database.db \
-	#   --image_path $WORKSPACE/images \
-	#   --output_path $WORKSPACE/sparse
-    #   --Mapper.priors_path $WORKSPACE/nav/data.txt
+    # 25.000 minutes
+	colmap mapper \
+	   	--database_path $WORKSPACE/database.db \
+	   	--image_path $WORKSPACE/images \
+	   	--output_path $WORKSPACE/sparse
+		#--Mapper.priors_path $WORKSPACE/nav/data.txt
 
-    #mkdir $WORKSPACE/sparse/geo-registered-model
+    mkdir $WORKSPACE/sparse/geo-registered-model
 
-	#colmap model_aligner \
-    #   --input_path $WORKSPACE/sparse/0 \
-    #   --output_path $WORKSPACE/sparse/geo-registered-model \
-    #   --ref_images_path $WORKSPACE/nav/data.txt \
-    #   --ref_is_gps 1 \
-    #   --alignment_type ecef \
-    #   --robust_alignment 1 \
-    #   --robust_alignment_max_error 3.0 #(where 3.0 is the error threshold to be used in RANSAC)
+    # output: ecef or enu
+	colmap model_aligner \
+       --input_path $WORKSPACE/sparse/0 \
+       --output_path $WORKSPACE/sparse/geo-registered-model \
+       --ref_images_path $WORKSPACE/nav/gps.txt \
+       --ref_is_gps 1 \
+       --alignment_type enu \
+       --robust_alignment 1 \
+       --robust_alignment_max_error 3.0 #(where 3.0 is the error threshold to be used in RANSAC)
 
+    mv $WORKSPACE/sparse/geo-registered-model/* $WORKSPACE/sparse
     #mv $WORKSPACE/sparse/0/* $WORKSPACE/sparse
     #rm -r $WORKSPACE/sparse/0
 
-    #colmap model_converter \
-    #  --input_path $WORKSPACE/sparse/0 \
-    #  --output_path $WORKSPACE/sparse \
-    #  --output_type TXT
-	
+    colmap model_converter \
+      	--input_path $WORKSPACE/sparse/ \
+      	--output_path $WORKSPACE/sparse \
+      	--output_type TXT
 fi
 
 # Run LIMAP
-cd ../../window-tracker/limap
+#cd ../../window-tracker/limap
+cd limap
 source /home/mrt/anaconda3/etc/profile.d/conda.sh
 conda activate limap
 if [ "$run_limap" = true ]; then
@@ -111,8 +115,23 @@ if [ "$run_limap" = true ]; then
 fi
 
 # Track windows and compute normals
-# TODO output window data to disk (location+normal)
-#cd ../
-#python3 get_windows.py $WORKSPACE --limap_w=$LIMAP_W --limap_h=$LIMAP_H --engine=$ENGINE  # Rectified image dimensions: 1911x1200 Vulcan, 3770x2120 DJI
+cd ../
+if [ "$run_tracking" = true ]; then
+	# TODO output window data to disk (location+normal)
+	python3 get_windows.py $WORKSPACE --limap_w=$LIMAP_W --limap_h=$LIMAP_H --engine=$ENGINE  # Rectified image dimensions: 1911x1200 Vulcan, 3770x2120 DJI
+
+	cd limap
+
+	python3 visualize_3d_lines_and_window_normals.py \
+		--input_dir $WORKSPACE/finaltracks/ \
+		--imagecols $WORKSPACE/imagecols.npy \
+		--normals_file $WORKSPACE/normals_results.json
+fi
+
+#cd ../../window-tracker
+#python3 visualise_map_with_normals.py \
+#	--points_path $WORKSPACE/sparse/points3D.txt
+#	--camera_poses_path $WORKSPACE/sparse/images.txt
+#	--normals_path $WORKSPACE/result_normals.txt
 
 echo Done ...

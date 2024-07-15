@@ -1,4 +1,5 @@
 import os
+import json
 import numpy as np
 import shutil
 from tqdm import tqdm
@@ -372,6 +373,46 @@ def read_lines_from_input(input_file):
 
     # exception
     raise ValueError("Error! File {0} not supported. should be txt, obj, or folder to the linetracks.".format(input_dir))
+
+# Tariq
+def read_normals_from_json(filename):
+    """
+    Read normals and centers from a JSON file.
+    :param filename: Name of the JSON file containing the window data.
+    :return: A tuple containing two lists: one for normals and another for centers, both represented as NumPy arrays.
+    """
+    with open(filename, 'r') as file:
+        data = json.load(file)
+
+    normals = []
+    centers = []
+    for item in data:
+        center_array = np.array(item["normal_location"])
+        normal_array = np.array(item["normal_direction"])
+
+        centers.append(center_array)
+        normals.append(normal_array)
+
+    return normals, centers
+
+# Tariq
+def read_normals_from_input(input_file):
+    """
+    General reader for normals and centers based on file type.
+    :param input_file: Path to the input file.
+    :return: A tuple of lists (normals, centers) depending on the file type.
+    """
+    if not os.path.exists(input_file):
+        raise ValueError(f"Error! Input file/directory {input_file} not found.")
+
+    if input_file.endswith('.json'):
+        return read_normals_from_json(input_file)
+
+    # Placeholder for potential future file type support
+    # elif input_file.endswith('.txt'):
+    #     return read_normals_from_txt(input_file)
+
+    raise ValueError(f"Error! File {input_file} not supported. Should be .json for the normals and centers.")
 
 def exists_txt_segments(folder, img_id):
     fname = os.path.join(folder, 'segments_{0}.txt'.format(img_id))

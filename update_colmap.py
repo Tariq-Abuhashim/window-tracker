@@ -20,13 +20,20 @@ def read_gps_data(file_path):
 
     # Create a dictionary to store the poses
     poses = {}
+    print(f'Warning: yaw has been inverted by (-).')
     for index, row in data.iterrows():
-        x, y, z = gps_to_utm(row['lat'], row['lon'], row['alt'])
-        quaternion = euler_to_quaternion(row['roll'], row['pitch'], row['yaw'])
+        tx, ty, tz = gps_to_utm(row['lat'], row['lon'], row['alt'])
+        x_colmap, y_colmap, z_colmap = utm_to_colmap(tx, ty, tz)
+        rx, ry, rz = utm_to_colmap(-row['yaw'], row['pitch'], row['roll'])
+        quaternion = euler_to_quaternion(rx, ry, rz)
         image_name = row['image']
-        poses[image_name] = (x, y, z, quaternion)
+        poses[image_name] = (x_colmap, y_colmap, z_colmap, quaternion)
     
     return poses
+
+def utm_to_colmap(x, y, z):
+    # Convert UTM East-North-Up to COLMAP Right-Back-Down
+    return x, y, z  # x, -y, -z
 
 def gps_to_utm(lat, lon, alt):
     """Convert GPS coordinates to UTM."""
@@ -96,7 +103,7 @@ def plot_3d_poses(poses):
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
-    ax.set_title('3D Final Camera Poses and Orientations')
+    ax.set_title('Updated colmap priors')
     ax.legend()
     plt.show()
 

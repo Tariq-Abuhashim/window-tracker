@@ -66,7 +66,7 @@ class LineTracker:
         return np.hstack((R, t))
 
     def get_intrinsic_matrix(self, img_id):
-        if self.imagecols.exist_cam(img_id):
+        if self.imagecols.exist_cam(img_id)==True:
            camview = self.imagecols.camview(img_id)
            K = np.array(camview.K())
            return K[0,0], K[1,1], K[0,2], K[1,2]

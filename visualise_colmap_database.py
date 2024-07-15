@@ -57,7 +57,7 @@ def visualize_colmap_poses(db_path):
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
-    ax.set_title('3D Camera Poses and Orientations')
+    ax.set_title('Inside colmap database')
     ax.legend()
     plt.show()
 

@@ -1,7 +1,7 @@
-
+import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-import numpy as np
+import argparse
 
 def load_colmap_points(file_path):
     points = []
@@ -31,22 +31,21 @@ def load_camera_poses(file_path):
     with open(file_path, 'r') as file:
         for line in file:
             if line.startswith('#') or not line.strip():
-                continue  # Skip comments and empty lines
+                continue
             parts = line.split()
             try:
-                image_id = int(parts[0])  # Attempt to convert the first part to an integer
+                image_id = int(parts[0])
                 qw, qx, qy, qz = map(float, parts[1:5])
                 tx, ty, tz = map(float, parts[5:8])
                 poses[image_id] = {'rotation': [qw, qx, qy, qz], 'translation': [tx, ty, tz]}
             except ValueError:
-                continue  # Skip lines that do not start with an integer
+                continue
     return poses
-
 
 def quaternion_to_rotation_matrix(q):
     q = np.array(q)
     if np.isclose(np.linalg.norm(q), 0):
-        return np.eye(3)  # Return an identity matrix if the quaternion is zero
+        return np.eye(3)
     q /= np.linalg.norm(q)
     qw, qx, qy, qz = q
     return np.array([
@@ -61,13 +60,9 @@ def visualize_points_normals_and_cameras(points, colors, normals, camera_poses, 
     points = np.array(points)
     normals = np.array(normals)
 
-    # Scatter plot for points
-    #ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=colors, s=point_size)
+    ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=colors, s=point_size)
+    ax.quiver(points[:, 0], points[:, 1], points[:, 2], normals[:, 0], normals[:, 1], normals[:, 2], length=arrow_length, color='k', alpha=0.6)
 
-    # Adding normals as quivers
-    #ax.quiver(points[:, 0], points[:, 1], points[:, 2], normals[:, 0], normals[:, 1], normals[:, 2], length=arrow_length, color='k', alpha=0.6)
-
-    # Adding camera poses
     for pose in camera_poses.values():
         tx, ty, tz = pose['translation']
         R = quaternion_to_rotation_matrix(pose['rotation'])
@@ -77,16 +72,25 @@ def visualize_points_normals_and_cameras(points, colors, normals, camera_poses, 
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
-    ax.set_title('COLMAP Points, Normals, and Camera Poses')
+    ax.set_title('Points, Normals, and Camera Poses')
 
     plt.show()
 
-# Example usage
-points_path = '/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/colmap/sparse/points3D.txt'
-normals_path = '/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/colmap/normals_results.txt'
-camera_poses_path = '/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/colmap/sparse/images.txt'
+def main():
+    parser = argparse.ArgumentParser(description="Visualize COLMAP reconstruction with normals and camera poses.")
+    parser.add_argument("points_path", help="Path to the COLMAP points3D.txt file")
+    parser.add_argument("normals_path", help="Path to the normals results file")
+    parser.add_argument("camera_poses_path", help="Path to the COLMAP images.txt file")
 
-points, colors = load_colmap_points(points_path)
-camera_poses = load_camera_poses(camera_poses_path)
-normals = [] #load_normals(normals_path)
-visualize_points_normals_and_cameras(points, colors, normals, camera_poses)
+    args = parser.parse_args()
+
+    #points, colors = load_colmap_points(args.points_path)
+    #normals = load_normals(args.normals_path)
+    camera_poses = load_camera_poses(args.camera_poses_path)
+
+    points, colors, normals = [], [], []
+
+    visualize_points_normals_and_cameras(points, colors, normals, camera_poses)
+
+if __name__ == "__main__":
+    main()
