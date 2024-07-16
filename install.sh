@@ -4,7 +4,7 @@
 set -e
 
 # Check DETR
-python -c "import sys; sys.path.append('../detr/src'); from infer_engine import TensorRTInference"
+python3 -c "import sys; sys.path.append('../detr/src'); from infer_engine import TensorRTInference"
 
 # Check Python version
 python3 --version
@@ -15,14 +15,6 @@ sudo apt-get update && sudo apt-get upgrade -y
 
 # Install basic dependencies
 sudo apt-get install -y cmake git libhdf5-dev build-essential
-
-# Check Python version
-python3 --version
-pip3 --version
-
-# Check Python version
-python3 --version
-pip3 --version
 
 # Update pip
 #python3 -m pip install --upgrade pip
@@ -51,7 +43,7 @@ cd ../
 
 # Clone COLMAP from the official repository
 sudo apt-get update
-sudo apt-get install git cmake build-essential \
+sudo apt-get install -y git cmake build-essential \
     libboost-program-options-dev libboost-filesystem-dev libboost-graph-dev \
     libboost-regex-dev libboost-system-dev libboost-test-dev \
     libeigen3-dev libsuitesparse-dev libfreeimage-dev libgoogle-glog-dev libgflags-dev libglew-dev \
@@ -59,6 +51,7 @@ sudo apt-get install git cmake build-essential \
     libatlas-base-dev libsuitesparse-dev libceres-dev libmetis-dev libhdf5-dev libflann-dev
 git clone https://github.com/colmap/colmap.git
 cd colmap
+git checkout 3.8
 echo "installing colmap ${PWD}"
 #git checkout tags/3.8 -b v3.8
 if [ ! -d "build" ]; then
@@ -68,6 +61,7 @@ cd build
 cmake -DCMAKE_CUDA_ARCHITECTURES="75" ..
 make -j$(nproc)  # Compile using all available cores
 sudo make install
+# sudo apt install -y colmap << THis is not a dev version, no cmakelists or headers.
 
 cd ../../
 
@@ -88,7 +82,6 @@ cd ../../
 # Build limap dependencies and install
 cd window-tracker/limap/third-party
 echo "installing limap dependencies ${PWD}"
-git clone https://github.com/pybind/pybind11.git
 git clone https://github.com/cvg/Hierarchical-Localization.git
 cd Hierarchical-Localization && git submodule update --init --recursive && cd ../
 git clone https://github.com/B1ueber2y/JLinkage
@@ -97,14 +90,11 @@ git clone https://github.com/B1ueber2y/RansacLib.git
 cd RansacLib && git submodule update --init --recursive && cd ../
 git clone https://github.com/B1ueber2y/HighFive.git
 cd HighFive && git submodule update --init --recursive && cd ../
-git clone https://github.com/iago-suarez/pytlsd.git
-cd pytlsd && git submodule update --init --recursive && cd ../
 git clone https://github.com/iago-suarez/pytlbd.git
 cd pytlbd && git submodule update --init --recursive && cd ../
 git clone https://github.com/cherubicXN/hawp.git
 git clone https://github.com/cvg/DeepLSD.git
 cd DeepLSD && git submodule update --init --recursive && cd ../
-git clone https://github.com/cvg/GlueStick.git
 git clone https://github.com/rpautrat/TP-LSD.git
 #cd TP-LSD && git submodule update --init --recursive
 #cd tp_lsd/modeling && rm -r DCNv2
