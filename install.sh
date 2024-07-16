@@ -3,6 +3,13 @@
 # Stop execution if any command fails
 set -e
 
+# Check DETR
+python -c "import sys; sys.path.append('../detr/src'); from infer_engine import TensorRTInference"
+
+# Check Python version
+python3 --version
+pip3 --version
+
 # Update and Upgrade system packages
 sudo apt-get update && sudo apt-get upgrade -y
 
@@ -13,9 +20,13 @@ sudo apt-get install -y cmake git libhdf5-dev build-essential
 python3 --version
 pip3 --version
 
+# Check Python version
+python3 --version
+pip3 --version
+
 # Update pip
-python3 -m pip install --upgrade pip
-python3 -m pip install --upgrade pip setuptools
+#python3 -m pip install --upgrade pip
+#python3 -m pip install --upgrade pip setuptools
 
 cd ../
 
