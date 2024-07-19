@@ -1308,8 +1308,8 @@ void System::WriteCamerasText(const std::string& path) const {
     line.precision(17);
 	line << pCamera->GetId()+1 << " "; // ORBSLAM starts from 0, COLMAP starts from 1
 	line << cTypes[pCamera->GetType()] << " ";
-	line << 3840 << " ";  // vulcan 1936, DJI 3840
-	line << 2160 << " "; // vulcan 1216, DJI 2160
+	line << 1936 << " ";  // vulcan 1936, DJI 3840
+	line << 1216 << " "; // vulcan 1216, DJI 2160
     for (int i; i<pCamera->size(); i++){ // size() returns number of parameters
 		line << pCamera->getParameter(i) << " ";
 	}
@@ -1493,8 +1493,8 @@ void System::WriteImagesText(const string& path) {
 		long long timestamp_ns = static_cast<long long>(pKF->mTimeStamp * 1e6);  // euroc (1e9), dji and vulcan (1e6)
        	//ss << std::fixed << std::setprecision(0) << std::setfill('0') << std::setw(totalDigits) << timestamp_ns;
 
-    	ss << std::fixed << std::setprecision(0) << "0" << pKF->mTimeStamp * 1e6; // DJI needs 0
-		//ss << std::fixed << std::setprecision(0) << pKF->mTimeStamp * 1e6;
+    	//ss << std::fixed << std::setprecision(0) << "0" << pKF->mTimeStamp * 1e6; // DJI needs 0
+		ss << std::fixed << std::setprecision(0) << pKF->mTimeStamp * 1e6;
 
 		line << ss.str() << ".png";
 

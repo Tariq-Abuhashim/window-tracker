@@ -160,6 +160,10 @@ add_executable(mono_vulcan
         Examples/Monocular/mono_vulcan.cc)
 target_link_libraries(mono_vulcan ${PROJECT_NAME})
 
+add_executable(mono_geo_vulcan
+        Examples/Monocular/mono_geo_vulcan.cc)
+target_link_libraries(mono_geo_vulcan ${PROJECT_NAME})
+
 #Monocular inertial examples
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Monocular-Inertial)
 

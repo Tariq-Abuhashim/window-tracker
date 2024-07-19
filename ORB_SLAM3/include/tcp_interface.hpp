@@ -282,6 +282,22 @@ private:
     Imu data_;
 };
 
+/* derived class (Nav) */
+class NavData : public SensorData {
+public:
+    NavData(double timestamp, const Nav& data)
+        : SensorData(timestamp), data_(data) {}
+
+	std::size_t getDataSize() const override {
+        return 1; // TODO or whatever makes sense for your use case
+    }
+
+	const Nav& getData() const { return data_; }
+
+private:
+    Nav data_;
+};
+
 /* data queue */
 using dataQueue = std::deque<std::shared_ptr<SensorData>>;
 
@@ -720,6 +736,72 @@ private:
 			deque_.pop_front();
 		}
 		deque_.push_back(std::make_shared<ImuData>(timestamp, data));
+	}
+};
+
+/* derived nav class */
+
+class NavReader : public SensorReader {
+public:
+    NavReader(dataQueue& deque, const std::string& ip, const short& port, const std::string& format)
+        : SensorReader(deque, ip, port, format) {}
+
+private:
+
+	void processImpl() override {
+		comma::csv::format format(format_);
+		boost::asio::streambuf buffer;
+		auto mutable_buffers = buffer.prepare(format.size());
+		boost::asio::read(*socket_, buffer, boost::asio::transfer_exactly(format.size()));
+		//std::cout << "\n format size " << format.size() << std::endl;
+
+		// Process sensor data based on its type
+		Nav reading = processNav(buffer);
+	    addData(reading.header.stamp, reading);
+	}
+
+	/* Nav specific function using <advanced-navigation>*/
+	Nav processNav(boost::asio::streambuf& buffer) {
+
+		const char* data = boost::asio::buffer_cast<const char*>(buffer.data());
+		
+		size_t ptr = 0;
+
+		// create a header
+		Header header;
+		header.seq = 1;
+
+		// timestamp
+		header.stamp = *reinterpret_cast<const uint64_t*>(data + ptr); // timestamp from buffer
+		ptr += 1 * sizeof(uint64_t);
+		header.frame_id = "ned_frame";
+
+		// Initialize the Nav data
+		Nav nav;
+		nav.header = header;
+
+		// coordinates 2-4
+		for (int i = 0; i < 3; i++) { //coordinates (latitude, longitude, height)
+            nav.coordinates[i] = *reinterpret_cast<const double*>(data + ptr);
+            ptr += sizeof(double);
+        }
+
+		// orientation 5-7
+		for (int i = 0; i < 3; i++) { //orientation/x,orientation/y,orientation/z
+            nav.orientation[i] = *reinterpret_cast<const float*>(data + ptr);
+            ptr += sizeof(float);
+        }
+
+		return nav;
+	}
+
+	/* add data to the deque */
+	void addData(double timestamp, const Nav& data) {
+		std::lock_guard<std::mutex> guard(mtx); 
+		while (!deque_.empty() && deque_.back()->getTimestamp() > timestamp) {
+			deque_.pop_front();
+		}
+		deque_.push_back(std::make_shared<NavData>(timestamp, data));
 	}
 };
 

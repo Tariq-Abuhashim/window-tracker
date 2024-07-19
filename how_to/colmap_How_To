@@ -28,7 +28,7 @@ $ sudo apt install libceres-dev
 $ sudo apt install libmetis-dev
 $ sudo apt install libhdf5-dev
 
-$ git clone https://github.com/colmap/colmap
+$ git clone https://github.com/colmap/colmap.git
 $ cd colmap
 $ git checkout 3.8
 $ mkdir build && cd build
