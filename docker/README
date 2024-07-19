@@ -1,0 +1,9 @@
+
+# how to build
+./build
+
+# how to run
+docker exec -it missionsystems/detr-devel-amd64 bash
+
+# how to empty docker space:
+docker system prune -a -f --volumes
