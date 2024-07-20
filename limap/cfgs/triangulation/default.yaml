@@ -11,8 +11,8 @@ use_tmp: False
 n_visible_views: 4
 n_neighbors: 20 
 use_cuda: True
-visualize: False
-max_image_dim: 3840
+visualize: True
+max_image_dim: 1600
 skip_exists: False
 output_dir: null 
 output_folder: "finaltracks"
@@ -39,7 +39,7 @@ sfm:
 line2d:
     max_num_2d_segs: 3000
     do_merge_lines: False 
-    visualize: False
+    visualize: True
     save_l3dpp: False
     compute_descinfo: False
     detector: 

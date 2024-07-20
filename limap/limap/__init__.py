@@ -1,7 +1,5 @@
-import sys, os
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(current_dir, "../build/limap/_limap"))
-#sys.path.append("build/limap/_limap")
+import sys
+sys.path.append("build/limap/_limap")
 from _limap import *
 
 from . import base

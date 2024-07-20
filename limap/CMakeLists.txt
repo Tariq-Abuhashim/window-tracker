@@ -56,7 +56,6 @@ if(${CERES_VERSION} VERSION_LESS "2.2.0")
     add_definitions("-DCERES_PARAMETERIZATION_ENABLED")
 endif()
 find_package(PoseLib REQUIRED)
-find_package(RansacLib REQUIRED)
 
 ################################################################################
 # Add sources

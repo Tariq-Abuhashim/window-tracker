@@ -29,9 +29,9 @@ export LIMAP_CONFIG=cfgs/triangulation/default_fast.yaml # this is relative to l
 
 mkdir -p $WORKSPACE
 
-run_colmap=true
+run_colmap=false
 run_limap=false
-run_tracking=false
+run_tracking=true
 
 # Run COLMAP
 #cd ../colmap/build/
@@ -117,7 +117,7 @@ fi
 # Track windows and compute normals
 cd ../
 if [ "$run_tracking" = true ]; then
-	# TODO output window data to disk (location+normal)
+
 	python3 get_windows.py $WORKSPACE --limap_w=$LIMAP_W --limap_h=$LIMAP_H --engine=$ENGINE  # Rectified image dimensions: 1911x1200 Vulcan, 3770x2120 DJI
 
 	cd limap

@@ -1,0 +1,77 @@
+The limap CMakeLists appears to be broken, so I can't build limap.I am starting from the Dockerfile that you provided which seems to do everything except it never makes limap. window-tracker/docker/Dockerfile
+All the steps below are done inside an instance of that docker image.Issue 1:
+CMake compilation, I am trying to compile limap with cmake.
+
+cd /home/devops/src/hyperteaming/window-tracker/limap/build
+cmake ..
+make -j
+
+The compilation failed saying that #include <RansacLib/ransac.h> couldn't be found.
+It's not installed in the docker container and only exists in window-tracker-limap/third-party/RansacLibI saw that your top-level CMakeLists window-tracker/limap/CMakeLists.txt Is supposed to include the directories for RansacLib
+
+include_directories(${RANSACLIB_INCLUDE_DIRS})
+
+But that variable was empty
+
+message( status "RANSACLIB_INCLUDE_DIRS is ${RANSACLIB_INCLUDE_DIRS}" ) 
+
+So I manually added that directory to see how much further I could get the build
+I modified window-tracker/limap/CMakeLists.txt  to now read as:
+
+set( RANSACLIB_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/third-party/RansacLib )
+include_directories(${RANSACLIB_INCLUDE_DIRS})
+
+________________________________________________________________________________________________________________________________________
+Issue 2:
+'py::module_' has not been declared
+The python binding base/camera_view.cc is having a hard time using py::module_
+
+[ 14%] Building CXX object limap/CMakeFiles/limap.dir/base/camera_view.cc.o
+/home/devops/src/hyperteaming/window-tracker/limap/limap/base/camera_view.cc: In member function 'pybind11::array_t<unsigned char> limap::CameraView::read_image(bool) const':
+/home/devops/src/hyperteaming/window-tracker/limap/limap/base/camera_view.cc:50:26: error: 'py::module_' has not been declared
+   50 |     py::object cv2 = py::module_::import("cv2");
+
+I can comment this function out to make the code compile - but I have no idea what else this might break.
+For now I have changed lines 49-59 to comment out that line and see if I can get any further with the build.
+If you reference the CameraView::read_image  function anywhere, then I have broken functionality and potentially introduced seg faults.
+I haven't see this function used anywhere - but this is not a great hack.
+
+py::array_t<uint8_t> CameraView::read_image(const bool set_gray) const {
+    // py::object cv2 = py::module_::import("cv2");
+    // py::array_t<uint8_t> img = cv2.attr("imread")(image_name());
+    // if (w() > 0 && h() > 0)
+    //     img = cv2.attr("resize")(img, std::make_pair(w(), h()));
+    // if (set_gray) {
+    //     img = cv2.attr("cvtColor")(img, cv2.attr("COLOR_BGR2GRAY"));
+    // }
+    py::array_t<uint8_t> img;
+    return img;
+}
+
+________________________________________________________________________________________________________________________________________
+Issue 3:
+Including limap - CudaToolkit
+The compilation appeared to work, so now I am trying to run the bundler triangulation
+
+cd /home/devops/src/hyperteaming/window-tracker/limap
+python3 runners/bundler_triangulation.py
+
+devops@aspen:~/src/hyperteaming/window-tracker/limap$ python3 runners/bundler_triangulation.py 
+Traceback (most recent call last):
+  File "runners/bundler_triangulation.py", line 5, in <module>
+    import limap.base as _base
+  File "/home/devops/src/hyperteaming/window-tracker/limap/limap/__init__.py", line 5, in <module>
+    from _limap import *
+ImportError: /home/devops/src/hyperteaming/window-tracker/limap/limap/../build/limap/_limap/_limap.cpython-38-x86_64-linux-gnu.so: undefined symbol: cudaBindTexture
+
+Earlier you mentioned to modify /home/mrt/dev/mission-systems/window-tracker/limap/limap/base/__init__.py
+> should become
+import sys, os
+#current_dir = os.path.dirname(os.path.abspath(__file__))
+#sys.path.append(os.path.join(current_dir, "../build/limap/_limap"))
+sys.path.append("build/limap/_limap")
+
+Did you mean this file instead:  /home/mrt/dev/mission-systems/window-tracker/limap/limap/__init__.py  ?I didn't need to change them at all for python to find limap now that it is built.
+But when I try to run I have missing symbols
+
+ImportError: /home/devops/src/hyperteaming/window-tracker/limap/limap/../build/limap/_limap/_limap.cpython-38-x86_64-linux-gnu.so: undefined symbol: cudaBindTexture

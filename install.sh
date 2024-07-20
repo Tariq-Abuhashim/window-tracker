@@ -51,7 +51,7 @@ sudo apt-get install -y git cmake build-essential \
     libeigen3-dev libsuitesparse-dev libfreeimage-dev libgoogle-glog-dev libgflags-dev libglew-dev \
     qtbase5-dev libqt5opengl5-dev libcgal-dev libsqlite3-dev\
     libatlas-base-dev libsuitesparse-dev libceres-dev libmetis-dev libhdf5-dev libflann-dev
-git -b v3.8 clone https://github.com/colmap/colmap.git
+git clone -b v3.8 https://github.com/colmap/colmap.git
 cd colmap
 git checkout 3.8
 git reset HEAD --hard
@@ -70,6 +70,8 @@ cd ../../
 # Clone and install PoseLib
 git clone --recursive https://github.com/vlarsson/PoseLib.git
 cd PoseLib
+#python3 setup.py install
+#or
 echo "installing PoseLib ${PWD}"
 if [ ! -d "build" ]; then
     mkdir build
@@ -82,6 +84,7 @@ sudo make install
 cd ../../
 
 # Build limap dependencies and install
+# git clone https://gitlab.com/missionsystems/hyperteaming/window-tracker.git
 cd window-tracker/limap/third-party
 echo "installing limap dependencies ${PWD}"
 git clone --recursive https://github.com/pybind/pybind11.git
@@ -106,7 +109,7 @@ python3 -m pip install .
 
 cd ../GlueStick
 rm requirements.txt
-echo 'from setuptools import setup\n\nsetup(name="gluestick", version="0.0", packages=["gluestick"])' > setup.py
+printf 'from setuptools import setup\n\nsetup(name="gluestick", version="0.0", packages=["gluestick"])\n' > setup.py
 python3 -m pip install .
 
 cd ../../
