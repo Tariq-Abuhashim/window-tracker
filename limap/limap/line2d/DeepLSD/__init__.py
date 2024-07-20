@@ -1,2 +1,0 @@
-from .deeplsd import DeepLSDDetector
-

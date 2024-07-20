@@ -1,2 +1,0 @@
-from .extractor import SuperPointEndpointsExtractor
-from .matcher import NNEndpointsMatcher, SuperGlueEndpointsMatcher
