@@ -1,4 +1,4 @@
-# widnow_tracker
+# widnow-tracker
 
 <p align='center'>
     <img src="media/lines.png" alt="drawing" width="450"/>
@@ -34,6 +34,8 @@ sudo apt-get install libhdf5-dev
 ```
 * Python 3.9 + required packages
 ```bash
+git clone https://gitlab.com/missionsystems/hyperteaming/window-tracker
+cd widnow-tracker
 git submodule update --init --recursive
 
 # fix broken dependency
