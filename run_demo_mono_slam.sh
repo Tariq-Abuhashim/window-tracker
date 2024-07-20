@@ -10,9 +10,10 @@
 # Save Inertial data to disk
 # ./run_nav.sh
 # ./get_inertial.sh
+#
 export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/
 #export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024_05_30_03_auto_orbit/
-export WORKSPACE=$DATASET_PATH/orbslam
+export WORKSPACE=$DATASET_PATH/orbslam_down
 export MAX_DIMS=1936
 export LIMAP_W=1936
 export LIMAP_H=1216
@@ -30,7 +31,7 @@ export LIMAP_CONFIG=cfgs/triangulation/default_fast.yaml # this is relative to l
 
 mkdir -p $WORKSPACE
 
-run_orbslam=true
+run_orbslam=false
 run_limap=true
 
 # Run ORBSLAM
@@ -50,11 +51,17 @@ if [ "$run_orbslam" = true ]; then
 	#	$WORKSPACE/times.txt
 
 	# Vulcan images demo (not ready yet)
-	./Examples/Monocular-Inertial/mono_inertial_euroc \
+	./Examples/Monocular/mono_geo_vulcan \
 		Vocabulary/ORBvoc.txt \
-		Examples/Monocular-Inertial/vulcan.yaml \
-		$WORKSPACE \
-		$WORKSPACE/cam0/times.txt
+		Examples/Monocular/vulcan.yaml \
+		$WORKSPACE
+
+	# Vulcan images demo (not ready yet)
+	#./Examples/Monocular-Inertial/mono_inertial_euroc \
+	#	Vocabulary/ORBvoc.txt \
+	#	Examples/Monocular-Inertial/vulcan.yaml \
+	#	$WORKSPACE \
+	#	$WORKSPACE/cam0/times.txt
 
 	# DJI images demo (has been tested and is working)
 	#./Examples/Monocular/mono_euroc \

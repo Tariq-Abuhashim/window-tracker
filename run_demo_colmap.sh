@@ -30,11 +30,10 @@ export LIMAP_CONFIG=cfgs/triangulation/default_fast.yaml # this is relative to l
 mkdir -p $WORKSPACE
 
 run_colmap=false
-run_limap=false
+run_limap=true
 run_tracking=true
 
 # Run COLMAP
-#cd ../colmap/build/
 #colmap automatic_reconstructor --image_path ${IMAGES} --workspace_path ${WORKSPACE}
 # export the model as text files, then check intrinsics in cameras.txt
 if [ "$run_colmap" = true ]; then
@@ -48,19 +47,15 @@ if [ "$run_colmap" = true ]; then
        	--database_path $WORKSPACE/database.db
 
     # x-right, y-forward, z-up (UTM - meters)
-    #cd ../../window-tracker 
     python3 update_colmap.py \
        	--db_path $WORKSPACE/database.db \
        	--gps_data_file $WORKSPACE/nav/data.txt 
-    #cd ../colmap/build/
 
     # UTM to camera transform
 
     # x-right, y-backward, z-down (COLMAP frame - meters)
-    #cd ../../window-tracker
     python3 visualise_colmap_database.py \
        	--db_path $WORKSPACE/database.db
-    #cd ../colmap/build/
  
     # Check if database has been updated
     #sqlite3 $WORKSPACE/database.db
@@ -80,7 +75,8 @@ if [ "$run_colmap" = true ]; then
 
     mkdir $WORKSPACE/sparse/geo-registered-model
 
-    # output: ecef or enu
+    # Batch align to reference gps
+    # output: ecef or enupython -m pip install -Ive . 
 	colmap model_aligner \
        --input_path $WORKSPACE/sparse/0 \
        --output_path $WORKSPACE/sparse/geo-registered-model \
@@ -90,10 +86,12 @@ if [ "$run_colmap" = true ]; then
        --robust_alignment 1 \
        --robust_alignment_max_error 3.0 #(where 3.0 is the error threshold to be used in RANSAC)
 
+    # Move to sparse, because line-mapping looks there
     mv $WORKSPACE/sparse/geo-registered-model/* $WORKSPACE/sparse
     #mv $WORKSPACE/sparse/0/* $WORKSPACE/sparse
     #rm -r $WORKSPACE/sparse/0
 
+	# Convert to text format, for easier access
     colmap model_converter \
       	--input_path $WORKSPACE/sparse/ \
       	--output_path $WORKSPACE/sparse \
@@ -117,7 +115,7 @@ fi
 # Track windows and compute normals
 cd ../
 if [ "$run_tracking" = true ]; then
-
+	# TODO output window data to disk (location+normal)
 	python3 get_windows.py $WORKSPACE --limap_w=$LIMAP_W --limap_h=$LIMAP_H --engine=$ENGINE  # Rectified image dimensions: 1911x1200 Vulcan, 3770x2120 DJI
 
 	cd limap

@@ -51,7 +51,7 @@ sudo apt-get install -y git cmake build-essential \
     libeigen3-dev libsuitesparse-dev libfreeimage-dev libgoogle-glog-dev libgflags-dev libglew-dev \
     qtbase5-dev libqt5opengl5-dev libcgal-dev libsqlite3-dev\
     libatlas-base-dev libsuitesparse-dev libceres-dev libmetis-dev libhdf5-dev libflann-dev
-git clone -b v3.8 https://github.com/colmap/colmap.git
+git -b v3.8 clone https://github.com/colmap/colmap.git
 cd colmap
 git checkout 3.8
 git reset HEAD --hard
@@ -70,8 +70,6 @@ cd ../../
 # Clone and install PoseLib
 git clone --recursive https://github.com/vlarsson/PoseLib.git
 cd PoseLib
-#python3 setup.py install
-#or
 echo "installing PoseLib ${PWD}"
 if [ ! -d "build" ]; then
     mkdir build
@@ -84,42 +82,21 @@ sudo make install
 cd ../../
 
 # Build limap dependencies and install
-# git clone https://gitlab.com/missionsystems/hyperteaming/window-tracker.git
-cd window-tracker/limap/third-party
-echo "installing limap dependencies ${PWD}"
-git clone --recursive https://github.com/pybind/pybind11.git
-git clone --recursive https://github.com/cvg/Hierarchical-Localization.git
-git clone --recursive https://github.com/B1ueber2y/JLinkage
-git clone --recursive https://github.com/B1ueber2y/libigl.git
-git clone --recursive https://github.com/B1ueber2y/RansacLib.git
-git clone --recursive https://github.com/B1ueber2y/HighFive.git
-git clone --recursive https://github.com/iago-suarez/pytlsd.git
-git clone --recursive https://github.com/iago-suarez/pytlbd.git
-git clone --recursive https://github.com/cherubicXN/hawp.git
-git clone --recursive https://github.com/cvg/DeepLSD.git
-git clone --recursive https://github.com/cvg/GlueStick.git
+git submodule update --init --recursive
 
-git clone https://github.com/rpautrat/TP-LSD.git
-cd TP-LSD/tp_lsd/modeling
+cd limap
+export LIMAP=$PWD
+cd third-party/TP-LSD
+git checkout 5558050
+cd tp_lsd/modeling
+rm -r DCNv2
 git clone https://github.com/lucasjinreal/DCNv2_latest.git DCNv2
-cd ../../../
+cd $LIMAP
 
-cd pytlsd
-python3 -m pip install .
+python -m pip install -r requirements.txt
+python -m pip install -Ive .
 
-cd ../GlueStick
-rm requirements.txt
-printf 'from setuptools import setup\n\nsetup(name="gluestick", version="0.0", packages=["gluestick"])\n' > setup.py
-python3 -m pip install .
-
-cd ../../
-
-python3 -m pip install -r requirements.txt
-
-echo "installing limap ${PWD}"
-python3 setup.py install
-
-# Check if the LIMAP package is installed
+# Check if the limap package is installed
 python3 -c "import limap" && echo "LIMAP package installed successfully" || echo "Failed to install LIMAP package"
 
 # demo related, coordinate frame projections

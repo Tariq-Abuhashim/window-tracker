@@ -36,7 +36,17 @@ sudo apt-get install libhdf5-dev
 ```bash
 git submodule update --init --recursive
 
+# fix broken dependency
 cd limap
+export BASE=$PWD
+cd third-party/TP-LSD
+git checkout 5558050
+cd tp_lsd/modeling
+rm -r DCNv2
+git clone https://github.com/lucasjinreal/DCNv2_latest.git DCNv2
+cd $BASE
+
+# install line-mapping
 python -m pip install -r requirements.txt
 python -m pip install -Ive .
 python -c "import limap"
