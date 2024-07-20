@@ -1,26 +1,21 @@
-#
 import os, sys
 import argparse
+import json
 import cv2
-import glob
 import numpy as np
+import open3d as o3d
+from sklearn.linear_model import RANSACRegressor
 from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import torchvision.transforms as T
-import open3d as o3d
-from sklearn.linear_model import RANSACRegressor
-
-DEBUG=False
-
-#sys.path.append("../detr/src/ros1_rtr8")
-#from detect_trt import TensorRTInference
 
 sys.path.append("../detr/src")
 from infer_engine import TensorRTInference
-
 from window_tracker import Window, WindowTracker
 from line_tracker import LineTracker
+
+DEBUG = False
 
 def data_loader(src_directory):
     dataset = []
@@ -35,85 +30,144 @@ def data_loader(src_directory):
                 dataset.append((image_path, camera_path))
     return dataset
 
+######################### normals clustering and refinement
+
+from scipy.spatial import Delaunay
+
+def delaunay_triangulation(locations):
+    tri = Delaunay(locations)
+    return tri
+
+from collections import defaultdict
+
+def cluster_normals_by_triangulation(tri, normals, locations, angle_threshold=0.1):
+    """
+    Cluster normals based on Delaunay Triangulation of their locations.
+
+    :param tri: Delaunay triangulation of locations.
+    :param normals: Normal vectors.
+    :param locations: Locations associated with the normal vectors.
+    :param angle_threshold: Threshold to consider normals as belonging to the same cluster.
+    :return: Cluster labels for each normal.
+    """
+    def angle_between(v1, v2):
+        v1_u = v1 / np.linalg.norm(v1)
+        v2_u = v2 / np.linalg.norm(v2)
+        return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+
+    clusters = defaultdict(list)
+    cluster_id = 0
+
+    for simplex in tri.simplices:
+        for i in range(3):
+            for j in range(i + 1, 3):
+                if angle_between(normals[simplex[i]], normals[simplex[j]]) < angle_threshold:
+                    clusters[cluster_id].append(simplex[i])
+                    clusters[cluster_id].append(simplex[j])
+        cluster_id += 1
+
+    labels = np.zeros(len(normals), dtype=int) - 1
+    for cluster_id, indices in clusters.items():
+        for idx in indices:
+            labels[idx] = cluster_id
+
+    return labels
+
+def normalize_vectors(vectors):
+    return vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+
+def refine_normals_by_cluster(normals, labels):
+    """
+    Refine normals within each cluster to point in the same direction.
+
+    :param normals: A list of normal vectors.
+    :param labels: Cluster labels for each normal.
+    :return: A list of refined normal vectors.
+    """
+    unique_labels = np.unique(labels)
+    refined_normals = np.array(normals)
+
+    for label in unique_labels:
+        # Get the indices of normals belonging to the current cluster
+        cluster_indices = np.where(labels == label)[0]
+        if len(cluster_indices) == 0:
+            continue
+
+        # Calculate the average normal for the current cluster
+        average_normal = np.mean(refined_normals[cluster_indices], axis=0)
+        average_normal /= np.linalg.norm(average_normal)  # Normalize the average normal
+
+        # Align all normals in the cluster to point in the same direction as the average normal
+        for idx in cluster_indices:
+            dot_product = np.dot(refined_normals[idx], average_normal)
+            if dot_product < 0:
+                refined_normals[idx] = -refined_normals[idx]
+
+    return refined_normals
+
+######################### line-box association functions
+
 def do_lines_intersect(line1, box):
-    """Check if a line segment (defined by two points) intersects with a box."""
-    #print(line1)
+    """Check if a line segment (defined by two points) intersects with a box using the Liang-Barsky algorithm."""
     (x1, y1), (x2, y2) = line1
-    line_box = [min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)]
+    left, bottom, right, top = box
 
-    # Quick bounding box check to rule out no intersection possibility
-    if (line_box[2] < box[0] or line_box[0] > box[2] or
-            line_box[3] < box[1] or line_box[1] > box[3]):
+    def clip(p, q, u1, u2):
+        """Helper function for clipping"""
+        if p == 0 and q < 0:
+            return False, u1, u2  # Line is parallel and outside the clipping window
+        if p < 0:
+            r = q / p
+            if r > u2:
+                return False, u1, u2  # Line is completely outside
+            elif r > u1:
+                u1 = r  # Line is entering the clipping window
+        elif p > 0:
+            r = q / p
+            if r < u1:
+                return False, u1, u2  # Line is completely outside
+            elif r < u2:
+                u2 = r  # Line is exiting the clipping window
+        return True, u1, u2
+
+    dx = x2 - x1
+    dy = y2 - y1
+    u1, u2 = 0.0, 1.0
+
+    valid, u1, u2 = clip(-dx, x1 - left, u1, u2)
+    if not valid:
         return False
-    
-    # Line clipping as per Cohen-Sutherland or Liang-Barsky can be implemented here for precise calculation
-    
-    # This example assumes intersection for simplicity if bounding boxes of the line and box overlap
-    return True  # Replace with detailed algorithm or library function for actual geometric computation
 
-def get_intersection(p1, p2, p3, p4):
-    """
-    This function checks if the line segment p1-p2 intersects with line segment p3-p4
-    and returns the intersection point if it exists.
-    """
-    # Line p1-p2 represented as a1x + b1y = c1
-    a1 = p2[1] - p1[1]
-    b1 = p1[0] - p2[0]
-    c1 = a1 * p1[0] + b1 * p1[1]
+    valid, u1, u2 = clip(dx, right - x1, u1, u2)
+    if not valid:
+        return False
 
-    # Line p3-p4 represented as a2x + b2y = c2
-    a2 = p4[1] - p3[1]
-    b2 = p3[0] - p4[0]
-    c2 = a2 * p3[0] + b2 * p3[1]
+    valid, u1, u2 = clip(-dy, y1 - bottom, u1, u2)
+    if not valid:
+        return False
 
-    determinant = a1 * b2 - a2 * b1
-    if determinant == 0:
-        # The lines are parallel
-        return None
-    else:
-        # The intersection point is given by (x, y)
-        x = (b2 * c1 - b1 * c2) / determinant
-        y = (a1 * c2 - a2 * c1) / determinant
-        if min(p1[0], p2[0]) <= x <= max(p1[0], p2[0]) and min(p3[0], p4[0]) <= x <= max(p3[0], p4[0]):
-            if min(p1[1], p2[1]) <= y <= max(p1[1], p2[1]) and min(p3[1], p4[1]) <= y <= max(p3[1], p4[1]):
-                return (x, y)
-        return None
+    valid, u1, u2 = clip(dy, top - y1, u1, u2)
+    if not valid:
+        return False
 
-# Define a function to check if a point is inside the bounding box
-def is_point_in_box(point, b1, b2):
-    return b1[0] <= point[0] <= b2[0] and b1[1] <= point[1] <= b2[1]
+    return True
 
-# Check if both points of the line are inside the box
-def check_line_within_box(b1, b2, l1, l2):
-    if is_point_in_box(l1, b1, b2) and is_point_in_box(l2, b1, b2):  # FIXME one point, or both?
-        return True
-    return False
+# Function to check if both points of the line are inside the box
+def is_point_in_box(point, box):
+    left, bottom, right, top = box
+    return left <= point[0] <= right and bottom <= point[1] <= top
 
 def check_line_box(bbox, line):
     """
-    This function returns True if the line l1-l2 intersects with any side of the box defined by b1 and b2.
+    This function returns True if the line l1-l2 intersects with any side of the box defined by bbox.
     """
-    b1 = bbox[0:2]
-    b2 = bbox[2:4]
-    l1 = line[0]
-    l2 = line[1]
-
-    # Early exit if at least one end-point is inside the box
-    if check_line_within_box(b1, b2, l1, l2):
+    b1, b2 = bbox[:2], bbox[2:]
+    l1, l2 = line
+    if is_point_in_box(l1, bbox) and is_point_in_box(l2, bbox):
         return True
+    return do_lines_intersect(line, bbox)
 
-    box_lines = [
-        (b1, (b2[0], b1[1])),  # Bottom side
-        ((b2[0], b1[1]), b2),  # Right side
-        (b2, (b1[0], b2[1])),  # Top side
-        ((b1[0], b2[1]), b1)   # Left side
-    ]
-
-    for box_line in box_lines:
-        if get_intersection(l1, l2, box_line[0], box_line[1]):
-            return True
-
-    return False
+######################### window tracking functions
 
 # Dictionaries to store relationships and observations
 windows = {}
@@ -148,7 +202,7 @@ def find_3d_line_in_windows(line_ids):
 
     # Determine the window_id with the maximum number of associated lines
     if count:
-        max_window_id = max(count, key=count.get)  # Get the window_id with the maximum count
+        max_window_id = max(count, key=count.get) # Get the window_id with the maximum count
         if count[max_window_id] > 0:
             return max_window_id
 
@@ -180,31 +234,22 @@ def add_lines_to_window(window_id, line_3d_id, image_id):
     # Add the 2D line ID to the list for this image
     #windows[window_id]['2d_lines_by_image'][image_id].append(line_2d_id)
 
+######################### normals estimation functions
+
 # Compute normals for the 3D lines associated with a window
 def compute_normals(window_id, tracker):
-    center = []
-    normals = []
-    lines_3d = []
+    center, normals = [], []
     # Use get() to avoid KeyError if window_id is not in the dictionary
     window_data = windows.get(window_id)
 
     if window_data:
         # Retrieve the set of 3D lines associated with the window
-        lines_3d_id = window_data['3d_lines']
-        # Placeholder for actual normal computation logic
-        # Assuming you would calculate normals based on the 3D lines data
-        # Here, you would implement the mathematical operations to compute normals
-        lines_3d = []
-        for i in lines_3d_id:
-            lines_3d.append(tracker.get_3d_line(i))
-        #print(lines_3d)
+        lines_3d = [tracker.get_3d_line(i) for i in window_data['3d_lines']]
         center, normals = compute_3d_normals(lines_3d)
     else:
         print(f"No data available for window ID {window_id}")
 
     return center, normals, lines_3d
-
-import numpy as np
 
 def compute_3d_normals(lines_3d):
     # First, compute the normal vector from the 3D lines
@@ -214,27 +259,6 @@ def compute_3d_normals(lines_3d):
     center = calculate_center_on_plane(lines_3d, normal, plane_point)
     
     return center, normal
-
-def fit_plane_to_lines(lines):
-    # Prepare matrix A from line points
-    A = np.array([[x, y, z, 1] for line in lines for point in line for x, y, z in (point,)])
-    
-    # Apply Singular Value Decomposition
-    U, s, Vt = np.linalg.svd(A)
-    
-    # The plane coefficients are in the last row of Vt
-    plane_coeffs = Vt[-1]
-    normal = plane_coeffs[:3]
-    d = plane_coeffs[3]
-    
-    # Normalize the normal vector
-    normal = normal / np.linalg.norm(normal)
-    
-    # Return the normal and a point on the plane (we can use the mean of the points for simplicity)
-    points_array = np.array([point for line in lines for point in line])
-    plane_point = np.mean(points_array, axis=0)
-    
-    return normal, plane_point
 
 def fit_plane_to_lines_ransac(lines):
     # Flatten line endpoints into an array of points and sample more points along each line
@@ -252,10 +276,9 @@ def fit_plane_to_lines_ransac(lines):
     # Fit a plane using RANSAC in the x-z plane
     ransac = RANSACRegressor(residual_threshold=0.01)
     ransac.fit(xz, y)
-    
+
     # Extract the coefficients for the plane y = ax + cz + d
-    coef = ransac.estimator_.coef_
-    a, c = coef
+    a, c = ransac.estimator_.coef_
     d = ransac.estimator_.intercept_
     normal = np.array([-a, 1, -c])  # Normal to the plane
     
@@ -426,35 +449,83 @@ def rotation_matrix_from_vectors(vec1, vec2):
     R = np.eye(3) + k + np.dot(k, k) * ((1 - c) / (np.linalg.norm(v)**2))
     return R
 
+# Update window with normal and center
+def update_window(window_id, normal, center):
+    if window_id in windows:
+        window_data = windows.get(window_id, {})
+        window_data['center'] = center
+        window_data['normal'] = normal
+        windows[window_id] = window_data  # Update the dictionary with the new data
+        print(f'    Updated window {window_id} with normal and center')
+    else:
+        print(f'    Window {window_id} doest exist')
+
+# Save windows to file
+def write_windows(filename, line_tracker):
+    """
+    Write the results to a file in JSON format.
+
+    :param filename: Name of the file to write the results.
+    :param windows: Dictionary containing window data.
+    """
+    def convert_to_list(obj):
+        """Helper function to convert numpy arrays and other objects to JSON-serializable lists."""
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, (list, tuple)):
+            return [convert_to_list(i) for i in obj]
+        elif isinstance(obj, dict):
+            return {k: convert_to_list(v) for k, v in obj.items()}
+        else:
+            return obj
+
+    data_to_write = []
+    for window_id, window_data in windows.items():
+        center = window_data.get('center')
+        normal = window_data.get('normal')
+        lines = window_data.get('3d_lines', [])
+        line_coords = [convert_to_list(line_tracker.get_3d_line(line_id)) for line_id in lines]
+        num_lines = len(lines)
+        
+        if center is not None and normal is not None:
+            record = {
+                "window_id": window_id,
+                "normal_location": convert_to_list(center),
+                "normal_direction": convert_to_list(normal),
+                "number_lines": num_lines,
+                "lines_coordinates": line_coords
+            }
+            data_to_write.append(record)
+        else:
+            print(f'Window {window_id} does not have center or normal')
+
+    with open(filename, 'w') as file:
+        json.dump(data_to_write, file, indent=4)
+
 def main(args):
 
     # Structure to hold estimated normals for each tracked window across images
     all_estimated_normals = {}
 
     # Initialise TensorRTInference with the tensorRT model
-    trt_inference = TensorRTInference(args.engine, 1) #num_classes=1
+    trt_inference = TensorRTInference(args.engine, 1)#num_classes=1
     print("Detector Ready ...")
 
     # Initialise LineTracker
     line_tracker = LineTracker(args.work_dir+'/finaltracks/')
     print("Line Ready ...")
 
-    # Initialise WindowTracker with desired tracking method
-    #window_tracker = WindowTracker("iou", None)  # or "edges" for edge-line-based tracking
-    #print("Tracker Ready ...")
-    
-    window_counter = 0;
+    window_counter = 0
     num_images = line_tracker.get_number_of_images()
     num_tracks = line_tracker.get_num_tracks()
 
     # Check the camera intrinsics (colmap each image is camera, slam 1 camera)
-    for image_id in range(1, num_images):
-        K = line_tracker.get_intrinsic_matrix(image_id)
-        if K is not None:
-            print(line_tracker.get_intrinsic_matrix(image_id))
+    #for image_id in range(1, num_images):
+    #    K = line_tracker.get_intrinsic_matrix(image_id)
+    #    if K is not None:
+    #        print(line_tracker.get_intrinsic_matrix(image_id))
 
     for image_id in range(1, num_images):
-
         print(f'Keyframe {image_id}')
 
         # Get an image
@@ -466,6 +537,7 @@ def main(args):
         #    original	1936x1216x3
         #    limap		1911x1200x3  (average undistorted)
         #    Onnx model	1274x800 x3
+
         image_path = line_tracker.get_image_name(image_id)
         if DEBUG:
             print(image_path)
@@ -473,38 +545,27 @@ def main(args):
         if current_image is None:
             continue
         h, w, c = current_image.shape
-        #size = w*h
-        #if size!=23977200: #1440000: # resize to regulate size variations in limap undistorted images
         if h != args.limap_h or w != args.limap_w:
             current_image = cv2.resize(current_image, (args.limap_w, args.limap_h))
         if DEBUG:
             print(current_image.shape)
-        #print(f"{h}x{w}x{c}")
 
         # Detect windows
-        #probas, bboxes = trt_inference.detect(current_image) # TODO link this to window detector
         probas, bboxes = trt_inference.infer(current_image)
         detected_windows = [Window(bbox) for prob, bbox in zip(probas, bboxes) if np.argmax(prob) == 1] #FIXME # 3-for car,person, window,   1-for window only
         print(f'    number of detections {len(detected_windows)}')
-
-        # Pose
-        #current_pose = line_tracker.get_campose(image_id)
-        #print(current_pose)
-
-        # Track boxes
-        #window_tracker.track_and_assign_ids(detected_windows, current_pose, intrinsic_matrix)
-
+        
         # Check track in window
         for detection in detected_windows:
             lines_in_current_detection = []
             for track_id in range(1, num_tracks): # equivalent to [1:num_tracks+1)
-    
+
                 # Check 3d line length
-                if (line_tracker.linetracks[track_id].line.length()>20):  # FIXME reject long lines
+                if line_tracker.linetracks[track_id].line.length() > 3: #reject long lines (in meters)
                    continue
 
                 # Detect 2D lines
-                line2d = line_tracker.get_2d_line_in_image(track_id, image_id) # FIXME is there something that I can say, which tracks are in the current image
+                line2d = line_tracker.get_2d_line_in_image(track_id, image_id) # is there something that I can say, which tracks are in the current image
                 #line2d = line_tracker.get_a_projection(track_id, image_id)
                 if line2d is None:
                     continue
@@ -515,40 +576,36 @@ def main(args):
                     lines_in_current_detection.append(track_id)
                     if DEBUG:
                         (x1, y1), (x2, y2) = line2d_array
-                        cv2.line(current_image,(int(x1), int(y1)), (int(x2), int(y2)),(0,0,255),3)
+                        cv2.line(current_image, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 3)
                 else:
                     if DEBUG:
                         (x1, y1), (x2, y2) = line2d_array
-                        cv2.line(current_image,(int(x1), int(y1)), (int(x2), int(y2)),(255,0,0),3)
+                        cv2.line(current_image, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 1)
             if DEBUG:
                 print(f'    number of supporting lines = {len(lines_in_current_detection)}')
 
-            window_id='x'
-            if len(lines_in_current_detection)>3: #3
+            window_id = 'x'
+            if len(lines_in_current_detection) > 2: # was 3
                 #print(lines_in_current_detection)
                 window_id = find_3d_line_in_windows(lines_in_current_detection)
-
-                if image_id==1:
-                    window_counter+=1
+                if image_id == 1:
+                    window_counter += 1
                     window_id = window_counter
                     add_lines_to_window(window_id, lines_in_current_detection, image_id)
                 elif window_id is not None:
                     print(f'    updating window {window_id}')
                     add_lines_to_window(window_id, lines_in_current_detection, image_id)
-                #elif len(lines_in_current_detection)>3:
                 else:
-                    window_counter+=1
+                    window_counter += 1
                     window_id = window_counter
                     add_lines_to_window(window_id, lines_in_current_detection, image_id)
-
-            if DEBUG: #note that this will only display bounding boxes with 2d lines available
+            if DEBUG:
                 x1, y1, x2, y2 = detection.bounding_box
-                cv2.rectangle(current_image,(int(x1), int(y1)), (int(x2), int(y2)),(255,0,0),3)
+                cv2.rectangle(current_image, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 3)
                 text = f"{window_id}"
                 text_x = int(x1)
-                text_y = int(y2) + 20  # 20 pixels below the bottom of the rectangle
+                text_y = int(y2) + 20 # 20 pixels below the bottom of the rectangle
                 cv2.putText(current_image, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 1)
-
         if DEBUG:
             current_image = cv2.resize(current_image, (1600, 900))
             cv2.imshow('image', current_image)
@@ -559,12 +616,16 @@ def main(args):
     # Initialize visualizer
     vis = o3d.visualization.Visualizer()
     vis.create_window()
+
+    # Step 1: Compute normals and locations
     num_samples_per_line = 20
+    all_normals = []
+    all_locations = []
     for window_id, window_data in windows.items():
         center, normal, lines = compute_normals(window_id, line_tracker)  # Ensure this function returns correct values
 
         # Visualize the lines
-        line_set = create_line_set(lines, np.random.rand(3))  # Blue color for lines
+        line_set = create_line_set(lines, np.random.rand(3))
         vis.add_geometry(line_set)
 
         # Sample more points along each line
@@ -579,24 +640,66 @@ def main(args):
         pcd.points = o3d.utility.Vector3dVector(all_points)
         
         # Estimate normals for the point cloud
-        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=10))
+        #pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=10))
 
         # Calculate the mean normal
-        normals = np.asarray(pcd.normals)
-        average_normal = np.mean(normals, axis=0)
-        average_normal /= np.linalg.norm(average_normal)  # Normalize the average normal
+        #normals = np.asarray(pcd.normals)
+        #average_normal = np.mean(normals, axis=0)
+        #average_normal /= np.linalg.norm(average_normal)  # Normalize the average normal
 
         # Compute the geometric center of the point cloud
         points = np.asarray(pcd.points)
         center_location = np.mean(points, axis=0)
 
-        # Create and visualize the average normal as an arrow
-        arrow = o3d.geometry.TriangleMesh.create_arrow(cylinder_radius=0.01, cone_radius=0.02, cylinder_height=0.1, cone_height=0.05)
+        all_normals.append(normal)
+        all_locations.append(center_location)
+
+        # Update the window
+        update_window(window_id, normal, center_location)
+
+    # write window results to file
+    write_windows(args.work_dir+"/normals_results.json", line_tracker)
+
+
+
+    # Step 2: Normalize the normals
+    normalized_normals = normalize_vectors(all_normals)
+
+    # Step 3: Perform Delaunay Triangulation on locations
+    tri = delaunay_triangulation(all_locations)
+
+    # Step 4: Cluster normals based on the triangulation
+    labels = cluster_normals_by_triangulation(tri, normalized_normals, all_locations, angle_threshold=0.1)
+
+    # Step 5: Refine the normals based on the clusters
+    refined_normals = refine_normals_by_cluster(normalized_normals, labels)
+
+    # Debugging: Print unique labels and the color map size
+    unique_labels = np.unique(labels)
+    print(f"Unique labels: {unique_labels}")
+    print(f"Number of clusters: {len(unique_labels)}")
+
+    # Create a mapping from original labels to a range of indices
+    label_mapping = {label: idx for idx, label in enumerate(unique_labels)}
+
+    # Map each label to a unique color
+    color_map = plt.get_cmap("tab10")  # Use a colormap with enough distinct colors
+    colors = [color_map(i / len(unique_labels))[:3] for i in range(len(unique_labels))]
+
+    # Visualize the refined normals with colors based on clusters
+    for normal, location, label in zip(refined_normals, all_locations, labels):
+        print(f'{normal} {location}')
+        if label in label_mapping:
+            color = colors[label_mapping[label]]
+        else:
+            color = [1, 0, 0]  # Default to red if label is not found in mapping
+
+        arrow = o3d.geometry.TriangleMesh.create_arrow(cylinder_radius=0.2, cone_radius=0.4, cylinder_height=2, cone_height=1.0)
         transform = np.eye(4)
-        transform[:3, 3] = center_location
+        transform[:3, 3] = location
         transform[:3, :3] = rotation_matrix_from_vectors(np.array([0, 0, 1]), normal)
         arrow.transform(transform)
-        arrow.paint_uniform_color([1, 0, 0])  # Red color for the normal
+        arrow.paint_uniform_color(color)  # Color based on cluster
         vis.add_geometry(arrow)
       
     # Run the visualizer
@@ -624,11 +727,9 @@ class Args:
 
 if __name__ == "__main__":
     inargs = Args.parse_args()
-
     args = Args()
     args.work_dir = inargs.work_dir
     args.engine = inargs.engine
     args.limap_h = inargs.limap_h
     args.limap_w = inargs.limap_w
-    
     main(args)

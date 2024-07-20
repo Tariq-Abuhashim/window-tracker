@@ -52,6 +52,14 @@ cd $BASE
 python -m pip install -r requirements.txt
 python -m pip install -Ive .
 python -c "import limap"
+
+# if the import fails
+cd limap/build
+cmake .. && make -j8
+sudo make install
+cd ..
+python3 setup.py install
+python -c "import limap"
 ```
 ***
 
