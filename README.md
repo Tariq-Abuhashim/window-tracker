@@ -15,9 +15,8 @@ This is the window global normal computation code. The code present in this repo
 
 Main dependencies include:   
 1- COLMAP (https://github.com/colmap/colmap).  
-3- ORBSLAM3 (https://github.com/UZ-SLAMLab/ORB_SLAM3).  
 2- PoseLib (https://github.com/PoseLib/PoseLib).  
-4- DETR (https://gitlab.com/missionsystems/hyperteaming/detr).  
+3- DETR (https://gitlab.com/missionsystems/hyperteaming/detr).  
 Depending on whether COLMAP or ORBSLAM3 is used, some of these dependencies can be ignored.   
 
 
