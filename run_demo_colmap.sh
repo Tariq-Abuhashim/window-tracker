@@ -30,7 +30,7 @@ export LIMAP_CONFIG=cfgs/triangulation/default_fast.yaml # this is relative to l
 mkdir -p $WORKSPACE
 
 run_colmap=false
-run_limap=true
+run_limap=false
 run_tracking=true
 
 # Run COLMAP
@@ -76,7 +76,7 @@ if [ "$run_colmap" = true ]; then
     mkdir $WORKSPACE/sparse/geo-registered-model
 
     # Batch align to reference gps
-    # output: ecef or enupython -m pip install -Ive . 
+    # output: ecef or enu
 	colmap model_aligner \
        --input_path $WORKSPACE/sparse/0 \
        --output_path $WORKSPACE/sparse/geo-registered-model \
@@ -99,7 +99,8 @@ if [ "$run_colmap" = true ]; then
 fi
 
 # Run LIMAP
-#cd ../../window-tracker/limap
+# if facing issues linking libJLinkage.so
+# 
 cd limap
 source /home/mrt/anaconda3/etc/profile.d/conda.sh
 conda activate limap
@@ -115,7 +116,6 @@ fi
 # Track windows and compute normals
 cd ../
 if [ "$run_tracking" = true ]; then
-	# TODO output window data to disk (location+normal)
 	python3 get_windows.py $WORKSPACE --limap_w=$LIMAP_W --limap_h=$LIMAP_H --engine=$ENGINE  # Rectified image dimensions: 1911x1200 Vulcan, 3770x2120 DJI
 
 	cd limap

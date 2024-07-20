@@ -36,8 +36,8 @@ RUN python3 setup.py install
 
 # Dependencies for CERES and COLMAP
 USER root
-RUN sudo apt-get update
-RUN sudo apt-get install -y git cmake build-essential \
+RUN apt-get update
+RUN apt-get install -y git cmake build-essential \
     libboost-program-options-dev libboost-filesystem-dev libboost-graph-dev \
     libboost-regex-dev libboost-system-dev libboost-test-dev \
     libeigen3-dev libsuitesparse-dev libfreeimage-dev libgoogle-glog-dev libgflags-dev libglew-dev \
@@ -58,118 +58,140 @@ RUN wget https://github.com/Kitware/CMake/releases/download/v3.28.4/cmake-3.28.4
 #WORKDIR /home/devops/src
 #RUN git clone https://ceres-solver.googlesource.com/ceres-solver
 #WORKDIR /home/devops/src/ceres-solver
-#RUN $PWD
 #RUN mkdir build
 #WORKDIR /home/devops/src/ceres-solver/build
-#RUN cmake ..
+#RUN cmake .. -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF
 #RUN make -j$(nproc)
 #USER root
 #RUN make install
 
 
 # Build and install COLMAP.
-#USER devops
-#WORKDIR /home/devops/src
-#RUN git clone -b 3.8 https://github.com/colmap/colmap.git
-#WORKDIR /home/devops/src/colmap
-#RUN git checkout 3.8
-#RUN git reset --hard 3.8
-#RUN echo "installing colmap ${PWD}"
-#RUN mkdir build
-#WORKDIR /home/devops/src/colmap/build
-#RUN cmake -DCMAKE_CUDA_ARCHITECTURES="75" ..
-#RUN make -j$(nproc)  # Compile using all available cores
-#USER root
-#RUN sudo make install
+USER devops
+WORKDIR /home/devops/src
+RUN git clone -b 3.8 https://github.com/colmap/colmap.git
+WORKDIR /home/devops/src/colmap
+RUN git checkout 3.8
+RUN git reset --hard 3.8
+RUN echo "installing colmap ${PWD}"
+RUN mkdir build
+WORKDIR /home/devops/src/colmap/build
+RUN cmake -DCMAKE_CUDA_ARCHITECTURES="75" ..
+RUN make -j$(nproc)  # Compile using all available cores
+USER root
+RUN make install
 
 
 # Enable GUI
-#USER root
-#RUN apt-get update \
-#  && apt-get install -y -qq --no-install-recommends \
-#    libglvnd0 \
-#    libgl1 \
-#    libglx0 \
-#    libegl1 \
-#    libxext6 \
-#    libx11-6 \
-#  && rm -rf /var/lib/apt/lists/*
+USER root
+RUN apt-get update \
+  && apt-get install -y -qq --no-install-recommends \
+    libglvnd0 \
+    libgl1 \
+    libglx0 \
+    libegl1 \
+    libxext6 \
+    libx11-6 \
+  && rm -rf /var/lib/apt/lists/*
 
 
-# PoseLib
-#USER devops
-#WORKDIR /home/devops/src
-#RUN git clone --recursive https://github.com/vlarsson/PoseLib.git
-#WORKDIR /home/devops/src/PoseLib
-#RUN echo "installing PoseLib ${PWD}"
-#RUN mkdir build
-#WORKDIR /home/devops/src/PoseLib/build
-#RUN cmake ..
-#RUN make -j$(nproc)
-#USER root
-#RUN sudo make install
+# Install PoseLib
+USER devops
+WORKDIR /home/devops/src
+RUN git clone --recursive https://github.com/vlarsson/PoseLib.git
+WORKDIR /home/devops/src/PoseLib
+RUN mkdir build
+WORKDIR /home/devops/src/PoseLib/build
+RUN cmake ..
+RUN make -j$(nproc)
+USER root
+RUN make install
+
 
 # Git LFS
-#USER root
-#RUN apt install -y git-lfs
+USER root
+RUN apt update
+RUN apt install -y git-lfs
+
 
 # window-tracker
-#USER devops
-#WORKDIR /home/devops/src/hyperteaming
-#RUN git clone git@gitlab.com:missionsystems/hyperteaming/window-tracker.git
-#WORKDIR /home/devops/src/hyperteaming/window-tracker/limap/third-party
-#RUN git clone --recursive https://github.com/pybind/pybind11.git
-#RUN git clone --recursive https://github.com/cvg/Hierarchical-Localization.git
-#RUN git clone --recursive https://github.com/B1ueber2y/JLinkage
-#RUN git clone --recursive https://github.com/B1ueber2y/libigl.git
-#RUN git clone --recursive https://github.com/B1ueber2y/RansacLib.git
-#RUN git clone --recursive https://github.com/B1ueber2y/HighFive.git
-#RUN git clone --recursive https://github.com/iago-suarez/pytlsd.git
-#RUN git clone --recursive https://github.com/iago-suarez/pytlbd.git
-#RUN git clone --recursive https://github.com/cherubicXN/hawp.git
-#RUN git clone --recursive https://github.com/cvg/DeepLSD.git
-#RUN git clone --recursive https://github.com/cvg/GlueStick.git
-#RUN git clone https://github.com/rpautrat/TP-LSD.git
-#WORKDIR /home/devops/src/hyperteaming/window-tracker/limap/third-party/TP-LSD/tp_lsd/modeling
-#RUN git clone https://github.com/lucasjinreal/DCNv2_latest.git DCNv2
+USER devops
+WORKDIR /home/devops/src/hyperteaming
+RUN git clone git@gitlab.com:missionsystems/hyperteaming/window-tracker.git
 
-#USER root
+WORKDIR /home/devops/src/hyperteaming/window-tracker/limap/third-party
+RUN git clone --recursive https://github.com/pybind/pybind11.git
+RUN git clone --recursive https://github.com/cvg/Hierarchical-Localization.git
+RUN git clone --recursive https://github.com/B1ueber2y/JLinkage
+RUN git clone --recursive https://github.com/B1ueber2y/libigl.git
 
-#WORKDIR /home/devops/src/hyperteaming/window-tracker/limap/third-party/pytlsd
-#RUN python3 -m pip install .
+# Set CMAKE_PREFIX_PATH to include PoseLib_DIR
+ENV CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/devops/src/PoseLib
+RUN git clone --recursive https://github.com/B1ueber2y/RansacLib.git
+WORKDIR /home/devops/src/hyperteaming/window-tracker/limap/third-party/RansacLib
+RUN mkdir build
+WORKDIR /home/devops/src/hyperteaming/window-tracker/limap/third-party/RansacLib/build
+RUN cmake ..
+RUN make -j$(nproc)
+USER root
+RUN make install
 
-#WORKDIR /home/devops/src/hyperteaming/window-tracker/limap/third-party/GlueStick
-#RUN rm requirements.txt
-#RUN echo 'from setuptools import setup\n\nsetup(name="gluestick", version="0.0", packages=["gluestick"])' > /home/devops/src/hyperteaming/window-tracker/limap/third-party/GlueStick/setup.py
-#RUN python3 -m pip install .
+WORKDIR /home/devops/src/hyperteaming/window-tracker/limap/third-party
+RUN git clone --recursive https://github.com/B1ueber2y/HighFive.git
+RUN git clone --recursive https://github.com/iago-suarez/pytlsd.git
+RUN git clone --recursive https://github.com/iago-suarez/pytlbd.git
+RUN git clone --recursive https://github.com/cherubicXN/hawp.git
+RUN git clone --recursive https://github.com/cvg/DeepLSD.git
+RUN git clone --recursive https://github.com/cvg/GlueStick.git
+
+RUN git clone https://github.com/rpautrat/TP-LSD.git
+WORKDIR /home/devops/src/hyperteaming/window-tracker/limap/third-party/TP-LSD/tp_lsd/modeling
+RUN git clone https://github.com/lucasjinreal/DCNv2_latest.git DCNv2
+
+WORKDIR /home/devops/src/hyperteaming/window-tracker/limap/third-party/pytlsd
+RUN python3 -m pip install .
+
+WORKDIR /home/devops/src/hyperteaming/window-tracker/limap/third-party/GlueStick
+RUN rm requirements.txt
+RUN printf 'from setuptools import setup\n\nsetup(name="gluestick", version="0.0", packages=["gluestick"])\n' > setup.py
+RUN python3 -m pip install .
+
+USER root
 
 # Remove distutils installed PyYAML
-#RUN apt-get remove -y python3-yaml
+RUN apt-get remove -y python3-yaml
 
 # Force reinstall PyYAML using pip to avoid distutils issues
-#RUN python3 -m pip install --upgrade --force-reinstall pyyaml
+RUN python3 -m pip install --upgrade --force-reinstall pyyaml
 
-#WORKDIR /home/devops/src/hyperteaming/window-tracker/limap
-#RUN python3 -m pip install -r requirements.txt
+USER devops
+
+WORKDIR /home/devops/src/hyperteaming/window-tracker/limap
+RUN python3 -m pip install -r requirements.txt
+
+# Set CMAKE_PREFIX_PATH to include PoseLib_DIR and RansacLib
+ENV CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/devops/src/PoseLib
+ENV RansacLib_DIR=/home/devops/src/hyperteaming/window-tracker/limap/third-party/RansacLib
+
+RUN python3 -m pip install .
+
 
 # TensorRT and Pycuda
-#USER root
-#RUN apt-get update
-#RUN python3 -m pip install tensorrt
-#RUN apt install -y tensorrt
-#RUN apt install -y python3-pycuda
-#RUN apt install -y python3-tk
+USER root
+RUN apt-get update
+RUN python3 -m pip install tensorrt
+RUN apt install -y tensorrt
+RUN apt install -y python3-pycuda
+RUN apt install -y python3-tk
+
 
 # DETR
-#WORKDIR /home/devops/src/hyperteaming
-#USER devops
-#RUN git clone git@gitlab.com:missionsystems/hyperteaming/detr.git
-#RUN pip3 install cython scipy
-#RUN pip3 install -U 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
-#RUN pip3 install git+https://github.com/cocodataset/panopticapi.git
+WORKDIR /home/devops/src/hyperteaming
+USER devops
+RUN git clone git@gitlab.com:missionsystems/hyperteaming/detr.git
+RUN pip3 install cython scipy
+RUN pip3 install -U 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
+RUN pip3 install git+https://github.com/cocodataset/panopticapi.git
 
-# demo related, coordinate frame projections
-#USER root
-#RUN apt install python3-pyproj
-#USER devops
-
+# switch user
+USER devops
