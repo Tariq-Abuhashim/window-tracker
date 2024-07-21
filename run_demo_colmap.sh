@@ -124,6 +124,11 @@ if [ "$run_tracking" = true ]; then
 		--input_dir $WORKSPACE/finaltracks/ \
 		--imagecols $WORKSPACE/imagecols.npy \
 		--normals_file $WORKSPACE/normals_results.json
+
+    # convert window location from UTM (meters) to GPS (lat,lon, alt)
+	python3 convert_normal_locations.py \
+        --windows_file $WORKSPACE/normals_results.json \
+        --reference_file $WORKSPACE/nav/gps.txt
 fi
 
 #cd ../../window-tracker
