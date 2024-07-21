@@ -70,6 +70,14 @@ def convert_normal_locations(json_file, reference_file):
 
     print(f"Updated data has been written back to {json_file}")
 
-json_file = '/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/colmap_down/normals_results.json'
-reference_file = '/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/colmap_down/nav/gps.txt'
-convert_normal_locations(json_file, reference_file)
+def main():
+    parser = argparse.ArgumentParser(description="Converts windows location from UTM meters to GPS lat, lon, alt.")
+    parser.add_argument("reference_file", help="Path to gps.txt file")
+    parser.add_argument("windows_file", help="Path to the normals results file")
+
+    args = parser.parse_args()
+
+    convert_normal_locations(args.windows_file, args.reference_file)
+
+if __name__ == "__main__":
+    main()
