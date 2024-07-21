@@ -73,8 +73,8 @@ def convert_normal_locations(json_file, reference_file):
 
 def main():
     parser = argparse.ArgumentParser(description="Converts windows location from UTM meters to GPS lat, lon, alt.")
-    parser.add_argument("reference_file", help="Path to gps.txt file")
-    parser.add_argument("windows_file", help="Path to the normals results file")
+    parser.add_argument("--reference_file", help="Path to gps.txt file")
+    parser.add_argument("--windows_file", help="Path to the normals results file")
 
     args = parser.parse_args()
 
