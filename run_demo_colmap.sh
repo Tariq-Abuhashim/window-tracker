@@ -99,11 +99,11 @@ if [ "$run_colmap" = true ]; then
 fi
 
 # Run LIMAP
-# if facing issues linking libJLinkage.so
-# 
 cd limap
 source /home/mrt/anaconda3/etc/profile.d/conda.sh
 conda activate limap
+# if facing issues linking libJLinkage.so
+# export LD_LIBRARY_PATH= third-party/JLinkage/lib/:$LD_LIBRARY_PATH
 if [ "$run_limap" = true ]; then
 	python3 runners/colmap_triangulation.py -c $LIMAP_CONFIG -a $WORKSPACE --output_dir $WORKSPACE --max_image_dim $MAX_DIMS
 	python3 visualize_3d_lines.py \
