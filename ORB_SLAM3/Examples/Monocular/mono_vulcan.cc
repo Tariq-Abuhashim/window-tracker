@@ -67,7 +67,7 @@ int main(int argc, char **argv)
     //vTimesTrack.resize(10000);
 
 	dataQueue imageQueue; // for ImageData
-    ImageReader image_reader(imageQueue,"127.0.0.1", 4001, "t,3ui,s[7062528]"); /* ("127.0.0.1", 4001) */
+    ImageReader image_reader(imageQueue,"127.0.0.1", 4001, "t,3ui,s[6912000]"); /* ("127.0.0.1", 4001) */
 	double image_time=-1;
 
 	// Start threads to read from the sensors
