@@ -11,12 +11,13 @@
 # ./run_nav.sh
 # ./get_inertial.sh
 #
-export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/
+export DATASET_PATH=/media/mrt/Whale/data/mapping/2024-07-22-16-21-36-orbit-/
+#export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/
 #export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024_05_30_03_auto_orbit/
-export WORKSPACE=$DATASET_PATH/orbslam_forward
-export MAX_DIMS=1936
-export LIMAP_W=1936
-export LIMAP_H=1216
+export WORKSPACE=$DATASET_PATH/orbslam
+export MAX_DIMS=1900
+export LIMAP_W=1900
+export LIMAP_H=1200
 
 # DJI :
 #export DATASET_PATH=$PWD/data/DJI_153
@@ -42,7 +43,7 @@ if [ "$run_orbslam" = true ]; then
 	# Vulcan CSV demo (not ready yet)
 	./Examples/Monocular/mono_vulcan \
 	    Vocabulary/ORBvoc.txt \
-	    Examples/Monocular/vulcan.yaml
+	    Examples/Monocular/weaver.yaml
 
 	# Vulcan images demo (not ready yet)
 	#./Examples/Monocular/mono_euroc \
