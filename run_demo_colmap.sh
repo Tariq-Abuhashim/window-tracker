@@ -10,8 +10,10 @@
 # ./get_nav_image.sh
 #
 export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/
+# export DATASET_PATH=/mnt/orac-share/datasets/field-trials/hyperteaming/2024-06-singleton/vulcan/2024-06-28-03-47-19-uotf-orbit-16/
 #export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024_05_30_03_auto_orbit/
 export WORKSPACE=$DATASET_PATH/colmap_down
+# export WORKSPACE=/home/fletcher/datasets/limap/demo
 export MAX_DIMS=1936
 export LIMAP_W=1911
 export LIMAP_H=1200
@@ -32,6 +34,10 @@ mkdir -p $WORKSPACE
 run_colmap=false
 run_limap=false
 run_tracking=true
+#run_colmap=true
+#run_limap=true
+#run_tracking=false
+
 
 # Run COLMAP
 #colmap automatic_reconstructor --image_path ${IMAGES} --workspace_path ${WORKSPACE}

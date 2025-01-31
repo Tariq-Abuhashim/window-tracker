@@ -12,6 +12,7 @@
 # ./get_inertial.sh
 #
 export DATASET_PATH=/media/mrt/Whale/data/mapping/2024-07-22-16-21-36-orbit-/
+# export DATASET_PATH=/mnt/orac-share/datasets/field-trials/hyperteaming/2024-06-singleton/vulcan/2024-06-28-03-47-19-uotf-orbit-16/
 #export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/
 #export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024_05_30_03_auto_orbit/
 export WORKSPACE=$DATASET_PATH/orbslam
