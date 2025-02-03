@@ -40,7 +40,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Dependencies for CERES and COLMAP
 USER root
 RUN apt-get update
-RUN apt-get install -y git cmake build-essential \
+#RUN apt-get install -y git cmake build-essential \
+RUN apt-get install -y git build-essential \
     libboost-program-options-dev libboost-filesystem-dev libboost-graph-dev \
     libboost-regex-dev libboost-system-dev libboost-test-dev \
     libeigen3-dev libsuitesparse-dev libfreeimage-dev libgoogle-glog-dev libgflags-dev libglew-dev \
