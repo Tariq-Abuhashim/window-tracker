@@ -1,11 +1,15 @@
 FROM missionsystems/base:20.04-ros2-cuda-devel
 
+# todo! freaking cmake version!
+# todo: superglue: trigger model download
+
 USER devops
 RUN mkdir -p /home/devops/src
 RUN mkdir -p /home/devops/Thirdparty
 RUN mkdir -p /home/devops/src/hyperteaming
 
-# Install a specific version of CMake (if needed)
+# Install a specific version of CMake, needed by limap
+RUN echo 'new build'
 USER root
 WORKDIR /home/devops/src
 RUN wget https://github.com/Kitware/CMake/releases/download/v3.28.4/cmake-3.28.4-Linux-x86_64.sh \
@@ -100,14 +104,10 @@ RUN make -j$(nproc)
 USER root
 RUN make install
 
-
-# Git LFS
 USER root
 RUN apt update
 RUN apt install -y git-lfs
 
-RUN echo 'new build'
-# window-tracker
 USER devops
 WORKDIR /home/devops/src/hyperteaming
 
