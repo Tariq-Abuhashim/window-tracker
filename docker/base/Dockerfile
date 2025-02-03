@@ -1,10 +1,16 @@
 FROM missionsystems/base:20.04-ros2-cuda-devel
 
+USER devops
+RUN mkdir -p /home/devops/src
+RUN mkdir -p /home/devops/Thirdparty
+RUN mkdir -p /home/devops/src/hyperteaming
 
-# Create necessary directories and set workdir
-RUN mkdir -p /home/devops/Thirdparty /home/devops/src/hyperteaming
-WORKDIR /home/devops/Thirdparty
-
+# Install a specific version of CMake (if needed)
+USER root
+WORKDIR /home/devops/src
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.28.4/cmake-3.28.4-Linux-x86_64.sh \
+    && chmod +x cmake-3.28.4-Linux-x86_64.sh \
+    && ./cmake-3.28.4-Linux-x86_64.sh --skip-license
 
 # Install OpenCV from apt repository
 USER root
@@ -12,27 +18,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libopencv-dev \
     python3-opencv
 
-
-# Install PyTorch from source
-USER devops
-WORKDIR /home/devops/src
-RUN git clone --recursive -b v1.11.0 https://github.com/pytorch/pytorch
-WORKDIR /home/devops/src/pytorch
-RUN git submodule sync && git submodule update --init --recursive --jobs 0
-USER root
-RUN python3 -m pip install astunparse numpy==1.19.5 ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses
-RUN CMAKE_CUDA_ARCHITECTURES="75" \
-    python3 setup.py install
-
+# # Install PyTorch from source
+# USER devops
+# WORKDIR /home/devops/src
+# RUN git clone --recursive -b v1.11.0 https://github.com/pytorch/pytorch
+# WORKDIR /home/devops/src/pytorch
+# RUN git submodule sync && git submodule update --init --recursive --jobs 0
+# USER root
+# RUN python3 -m pip install astunparse numpy==1.19.5 ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses
+# RUN CMAKE_CUDA_ARCHITECTURES="75" \
+#     python3 setup.py install
 
 # Install TorchVision from source
-USER devops
-WORKDIR /home/devops/src
-RUN git clone -b v0.12.0 https://github.com/pytorch/vision.git
-WORKDIR /home/devops/src/vision
-USER root
-RUN python3 setup.py install
-
+# USER devops
+# WORKDIR /home/devops/src
+# RUN git clone -b v0.12.0 https://github.com/pytorch/vision.git
+# WORKDIR /home/devops/src/vision
+# USER root
+# RUN python3 setup.py install
 
 # Dependencies for CERES and COLMAP
 USER root
@@ -43,15 +46,6 @@ RUN apt-get install -y git cmake build-essential \
     libeigen3-dev libsuitesparse-dev libfreeimage-dev libgoogle-glog-dev libgflags-dev libglew-dev \
     qtbase5-dev libqt5opengl5-dev libcgal-dev libsqlite3-dev\
     libatlas-base-dev libsuitesparse-dev libceres-dev libmetis-dev libhdf5-dev libflann-dev
-
-
-# Install a specific version of CMake (if needed)
-USER root
-WORKDIR /home/devops/src
-RUN wget https://github.com/Kitware/CMake/releases/download/v3.28.4/cmake-3.28.4-Linux-x86_64.sh \
-    && chmod +x cmake-3.28.4-Linux-x86_64.sh \
-    && ./cmake-3.28.4-Linux-x86_64.sh --skip-license
-
 
 # Build and install Ceres Solver
 #USER devops
@@ -81,19 +75,17 @@ RUN make -j$(nproc)  # Compile using all available cores
 USER root
 RUN make install
 
-
-# Enable GUI
-USER root
-RUN apt-get update \
-  && apt-get install -y -qq --no-install-recommends \
-    libglvnd0 \
-    libgl1 \
-    libglx0 \
-    libegl1 \
-    libxext6 \
-    libx11-6 \
-  && rm -rf /var/lib/apt/lists/*
-
+# # Enable GUI
+# USER root
+# RUN apt-get update \
+#   && apt-get install -y -qq --no-install-recommends \
+#     libglvnd0 \
+#     libgl1 \
+#     libglx0 \
+#     libegl1 \
+#     libxext6 \
+#     libx11-6 \
+#   && rm -rf /var/lib/apt/lists/*
 
 # Install PoseLib
 USER devops
@@ -194,24 +186,21 @@ RUN python3 -m pip install .
 # demo related, coordinate frame projections
 RUN python3 -m pip install pyproj
 
+# # TensorRT and Pycuda
+# USER root
+# RUN apt-get update
+# RUN python3 -m pip install tensorrt
+# RUN apt install -y tensorrt
+# RUN apt install -y python3-pycuda
+# RUN apt install -y python3-tk
 
-# TensorRT and Pycuda
-USER root
-RUN apt-get update
-RUN python3 -m pip install tensorrt
-RUN apt install -y tensorrt
-RUN apt install -y python3-pycuda
-RUN apt install -y python3-tk
-
-
-# DETR
-WORKDIR /home/devops/src/hyperteaming
-USER devops
-RUN git clone git@gitlab.com:missionsystems/hyperteaming/detr.git
-RUN pip3 install cython scipy
-RUN pip3 install -U 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
-RUN pip3 install git+https://github.com/cocodataset/panopticapi.git
-
+# # DETR
+# WORKDIR /home/devops/src/hyperteaming
+# USER devops
+# RUN git clone git@gitlab.com:missionsystems/hyperteaming/detr.git
+# RUN pip3 install cython scipy
+# RUN pip3 install -U 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
+# RUN pip3 install git+https://github.com/cocodataset/panopticapi.git
 
 # switch user
 USER devops
