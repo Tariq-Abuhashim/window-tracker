@@ -191,6 +191,9 @@ ENV RansacLib_DIR=/home/devops/src/hyperteaming/window-tracker/limap/third-party
 
 RUN python3 -m pip install .
 
+# demo related, coordinate frame projections
+RUN python3 -m pip install pyproj
+
 
 # TensorRT and Pycuda
 USER root
