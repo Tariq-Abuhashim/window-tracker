@@ -11,8 +11,8 @@
 # ./run_nav.sh
 # ./get_inertial.sh
 #
-export DATASET_PATH=/media/mrt/Whale/data/mapping/2024-07-22-16-21-36-orbit-/
-#export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024-06-28-03-47-19-uotf-orbit-16/
+#export DATASET_PATH=/media/mrt/Whale/data/mapping/2024-07-22-16-21-36-orbit-/
+export DATASET_PATH=/media/mrt/Whale/data/vulcan-mapping/2024-06-28-03-47-19-uotf-orbit-16/
 #export DATASET_PATH=/media/mrt/Whale/data/mission-systems/2024_05_30_03_auto_orbit/
 export WORKSPACE=$DATASET_PATH/orbslam
 export MAX_DIMS=1900
@@ -32,18 +32,19 @@ export LIMAP_CONFIG=cfgs/triangulation/default_fast.yaml # this is relative to l
 
 mkdir -p $WORKSPACE
 
-run_orbslam=true
+run_orbslam=false
 run_limap=false
-run_tracking=false
+run_tracking=true
 
 # Run ORBSLAM
-cd ORB_SLAM3/
 if [ "$run_orbslam" = true ]; then
 
+    cd ORB_SLAM3/
+    
 	# Vulcan CSV demo (not ready yet)
 	./Examples/Monocular/mono_vulcan \
 	    Vocabulary/ORBvoc.txt \
-	    Examples/Monocular/weaver.yaml
+	    Examples/Monocular/vulcan.yaml
 
 	# Vulcan images demo (not ready yet)
 	#./Examples/Monocular/mono_euroc \
@@ -75,22 +76,30 @@ if [ "$run_orbslam" = true ]; then
 	mkdir -p $WORKSPACE/sparse
 	mv sparse/* $WORKSPACE/sparse
 
+    cd ../
+    
 fi
 
 # Run LIMAP
-cd ../../window-tracker/limap
 #source /home/mrt/anaconda3/etc/profile.d/conda.sh
 #conda activate limap
 if [ "$run_limap" = true ]; then
+
+    cd limap/
+    
 	python3 runners/colmap_triangulation.py -c $LIMAP_CONFIG -a $WORKSPACE --output_dir $WORKSPACE --max_image_dim $MAX_DIMS
 	python3 visualize_3d_lines.py --input_dir $WORKSPACE/finaltracks/
+	
+	cd ../
+	
 fi
 
 # Track windows and compute normals
 # TODO output window data to disk (location+normal)
-cd ../
 if [ "$run_tracking" = true ]; then
+
 	python3 get_windows.py $WORKSPACE --limap_w=$LIMAP_W --limap_h=$LIMAP_H --engine=$ENGINE # 1911x1200 (1936x1216) Vulcan, 3770x2120 (3840x2160) DJI
+	
 fi
 
 echo Done ...
