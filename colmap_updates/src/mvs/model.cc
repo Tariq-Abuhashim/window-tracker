@@ -104,16 +104,16 @@ void Model::ReadFromCOLMAP(const std::string& path,
     for (const auto& track_el : point3D.second.Track().Elements()) {
 //      std::cout << "--- track_el: " << track_el.image_id << ", ";
       auto it = image_id_to_idx.find(track_el.image_id); // FIXME Tariq updated with safer access to unordered_map
-	  if (it != image_id_to_idx.end()) {
-        std::cout << it->first << ", " << it->second << ",";
-        point.track.push_back(it->second);
-        //point.track.push_back(image_id_to_idx.at(track_el.image_id));
-	  } else {
-        std::cout << "Key not found .... " << std::endl;
-        std::string msg = "Key " + std::to_string(track_el.image_id) + " not found in map.";
-        std::cout << msg << std::endl;
-        throw std::runtime_error(msg);
-	  }
+	  if (it != image_id_to_idx.end()) {  														//
+        std::cout << it->first << ", " << it->second << ",";									//
+        point.track.push_back(it->second);														//
+        //point.track.push_back(image_id_to_idx.at(track_el.image_id));							//
+	  } else {																					//	Tariq
+        std::cout << "Key not found .... " << std::endl;										//
+        std::string msg = "Key " + std::to_string(track_el.image_id) + " not found in map.";	//
+        std::cout << msg << std::endl;															//
+//        throw std::runtime_error(msg);														//
+	  }																							//
     }
     points.push_back(point);
 
