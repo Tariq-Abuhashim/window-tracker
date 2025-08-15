@@ -1,5 +1,6 @@
 # Ignore build directories
-/build/
+build/
+*/build/
 dist/
 
 # Ignore OS-specific files
