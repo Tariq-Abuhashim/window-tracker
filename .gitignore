@@ -14,11 +14,11 @@ build/
 **/CMakeConfigureLog.yaml
 
 # Compiled libraries and executables
-**/*.so
-**/*.a
-**/*.o
-**/*.out
-**/*.bin
+*.so
+*.a
+*.o
+*.out
+*.bin
 
 # Ignore OS-specific files
 .DS_Store
