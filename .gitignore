@@ -1,7 +1,25 @@
 # Ignore build directories
+**/build/
 build/
 */build/
 dist/
+
+# CMake build files
+**/CMakeCache.txt
+**/CMakeFiles/
+**/Makefile
+**/cmake_install.cmake
+**/*.cmake
+**/CMakeError.log
+**/CMakeOutput.log
+**/CMakeConfigureLog.yaml
+
+# Compiled libraries and executables
+**/*.so
+**/*.a
+**/*.o
+**/*.out
+**/*.bin
 
 # Ignore OS-specific files
 .DS_Store
