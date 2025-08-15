@@ -16,6 +16,9 @@
 * If not, see <http://www.gnu.org/licenses/>.
 */
 
+/**
+* Tariq updated - Aug, 2025
+**/
 
 #ifndef TRACKING_H
 #define TRACKING_H
@@ -41,6 +44,8 @@
 
 #include <mutex>
 #include <unordered_set>
+
+#include "MapObject.h" // Object-SLAM
 
 namespace ORB_SLAM3
 {
@@ -114,6 +119,22 @@ public:
     void Release();
     bool stopRequested();
 #endif
+
+	// Object-SLAM
+    // KITTI (stereo+LiDAR)
+    void GetObjectDetectionsLiDAR(KeyFrame *pKF);
+    void ObjectDataAssociation(KeyFrame *pKF);
+    // Freiburg Cars and Redwood (Mono)
+    int maskErrosion;
+    std::string detection_path;  // path to associated detected instances
+    cv::Mat GetCameraIntrinsics();
+    void GetObjectDetectionsMono(KeyFrame *pKF);
+    void AssociateObjectsByProjection(KeyFrame *pKF);  // assocating detection to object by projecting map points
+
+    inline void SetDebug(const bool flag) {
+    	std::cout << "[DEBUG]: Tracking debug flag has been set to TRUE\n";
+		_debug = flag;
+    }
 
 public:
 
@@ -365,6 +386,11 @@ protected:
     bool mbNotStop;
     std::mutex mMutexStop;
 #endif
+
+    // object-slam
+    bool _debug;
+    bool _use_python;
+    bool _use_lidar;
 
 public:
     cv::Mat mImRight;

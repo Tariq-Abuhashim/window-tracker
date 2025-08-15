@@ -16,6 +16,9 @@
 * If not, see <http://www.gnu.org/licenses/>.
 */
 
+/**
+* Tariq updated - Aug, 2025
+**/
 
 #ifndef MAP_H
 #define MAP_H
@@ -35,6 +38,7 @@ namespace ORB_SLAM3
 
 class MapPoint;
 class KeyFrame;
+class MapObject; // Object-SLAM
 class Atlas;
 class KeyFrameDatabase;
 
@@ -154,6 +158,18 @@ public:
     // DEBUG: show KFs which are used in LBA
     std::set<long unsigned int> msOptKFs;
     std::set<long unsigned int> msFixedKFs;
+
+	// Object SLAM
+    int mnDynamicObj;
+    std::set<MapObject*> mspMapObjects;
+    void AddMapObject(MapObject* pMO);
+    void EraseMapObject(MapObject* pMO);
+    MapObject* GetMapObject(int object_id);
+    std::vector<MapObject*> GetAllMapObjects();
+	void ApplyScaledRotationWithObjects(const Eigen::Matrix3f &R, 
+										const float s, 
+										const bool bScaledVel=false, 
+										const Eigen::Vector3f &t = Eigen::Vector3f::Zero());
 
 protected:
 

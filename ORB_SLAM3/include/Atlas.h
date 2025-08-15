@@ -16,11 +16,16 @@
 * If not, see <http://www.gnu.org/licenses/>.
 */
 
+/**
+* Tariq updated - Aug, 2025
+**/
+
 #ifndef ATLAS_H
 #define ATLAS_H
 
 #include "Map.h"
 #include "MapPoint.h"
+#include "MapObject.h" // Object-SLAM
 #include "KeyFrame.h"
 #include "GeometricCamera.h"
 #include "Pinhole.h"
@@ -37,6 +42,7 @@ namespace ORB_SLAM3
 class Viewer;
 class Map;
 class MapPoint;
+class MapObject; // Object-SLAM
 class KeyFrame;
 class KeyFrameDatabase;
 class Frame;
@@ -138,6 +144,12 @@ public:
     long unsigned int GetNumLivedKF();
 
     long unsigned int GetNumLivedMP();
+
+	// Object SLAM
+    void AddMapObject(MapObject* pMO);
+    void EraseMapObject(MapObject* pMO);
+    MapObject* GetMapObject(int object_id);
+    std::vector<MapObject*> GetAllMapObjects();
 
 protected:
 

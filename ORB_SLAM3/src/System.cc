@@ -16,7 +16,9 @@
 * If not, see <http://www.gnu.org/licenses/>.
 */
 
-
+/**
+* Tariq updated - Aug, 2025
+**/
 
 #include "System.h"
 #include "Converter.h"
@@ -34,6 +36,8 @@
 #include <boost/archive/xml_oarchive.hpp>
 
 #include "endian.hpp" // COLMAP
+#include <libgen.h>
+#include <pybind11/pybind11.h>
 
 namespace ORB_SLAM3
 {
@@ -43,16 +47,13 @@ Verbose::eLevel Verbose::th = Verbose::VERBOSITY_NORMAL; // VERBOSITY_NORMAL, VE
 System::System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor,
                const bool bUseViewer, const int initFr, const string &strSequence):
     mSensor(sensor), mpViewer(static_cast<Viewer*>(NULL)), mbReset(false), mbResetActiveMap(false),
-    mbActivateLocalizationMode(false), mbDeactivateLocalizationMode(false), mbShutDown(false)
+    mbActivateLocalizationMode(false), mbDeactivateLocalizationMode(false),
+    mbShutDown(false),
+    _debug (false), _use_python(false), _use_lidar(true)
 {
     // Output welcome message
-    cout << endl <<
-    "ORB-SLAM3 Copyright (C) 2017-2020 Carlos Campos, Richard Elvira, Juan J. Gómez, José M.M. Montiel and Juan D. Tardós, University of Zaragoza." << endl <<
-    "ORB-SLAM2 Copyright (C) 2014-2016 Raúl Mur-Artal, José M.M. Montiel and Juan D. Tardós, University of Zaragoza." << endl <<
-    "This program comes with ABSOLUTELY NO WARRANTY;" << endl  <<
-    "This is free software, and you are welcome to redistribute it" << endl <<
-    "under certain conditions. See LICENSE.txt." << endl << endl;
-
+    cout << "\n";
+    cout << "ORB-SLAM3 Copyright (C) 2017-2021, University of Zaragoza.\n";
     cout << "Input sensor was set to: ";
 
     if(mSensor==MONOCULAR)
@@ -68,13 +69,203 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     else if(mSensor==IMU_RGBD)
         cout << "RGB-D-Inertial" << endl;
 
-    //Check settings file
+	//Check settings file
     cv::FileStorage fsSettings(strSettingsFile.c_str(), cv::FileStorage::READ);
     if(!fsSettings.isOpened())
-    {
+	{
        cerr << "Failed to open settings file at: " << strSettingsFile << endl;
        exit(-1);
     }
+
+	/* Object-slam python stuff */
+
+	if(fsSettings["UsePython"].isInt()) {
+		 this->_use_python = (int)fsSettings["UsePython"] != 0;
+	}
+	if(fsSettings["UseLidar"].isInt()) {
+		 this->_use_lidar = (int)fsSettings["UseLidar"] != 0;
+	}
+	
+	if(this->_use_python) {
+
+			setenv("OMP_NUM_THREADS", "1", 1);
+			setenv("OPENBLAS_NUM_THREADS", "1", 1);
+			setenv("MKL_NUM_THREADS", "1", 1);
+			setenv("NUMBA_NUM_THREADS", "1", 1);
+			setenv("TOKENIZERS_PARALLELISM", "false", 1);
+			setenv("NUMBA_DISABLE_JIT", "1", 1);  // Disable JIT compilation
+			setenv("NUMBA_THREADING_LAYER", "safe", 1);  // Use safe threading (safe, workqueue)
+			//setenv("PYTHONNOUSERSITE", "1", 1);  // Ignore user-site packages
+			setenv("OPEN3D_CPU_PARALLEL_POLICY", "0", 1);  // Disable TBB parallelization in Open3D
+			setenv("PYTORCH_NO_CUDA_MEMORY_CACHING", "1", 1);
+			setenv("CUDA_LAUNCH_BLOCKING", "1", 1);  // forces CUDA errors to appear synchronously
+			setenv("TORCH_USE_RTLD_GLOBAL", "0", 1);  // "1" encourages symbol sharing. "0" no sharing
+			setenv("CUDA_MODULE_LOADING", "LAZY", 1);
+			//setenv("PYTHONPATH", "./Thirdparty/mmdetection3d", 1);
+
+		try {
+			/* Python environment verification */
+			if (Py_IsInitialized()) {
+				cerr << "[Pybind] Warning: Python interpreter already initialized!" << endl;
+			}
+			
+			std::cout << "[Pybind] Starting Python interpreter ..." << std::endl;
+			py::initialize_interpreter();
+			
+			std::cout << "[Pybind] Initialise python thread ..." << std::endl;
+            InitThread();  // This should be called right after interpreter initialization
+			
+			{
+				py::gil_scoped_acquire acquire;
+				
+				/* System checks */
+				
+				std::cout << "[Pybind] Import sys module ..." << std::endl;
+				py::module sys = py::module::import("sys");
+
+
+				std::string version = py::str(sys.attr("version"));
+				std::string executable = py::str(sys.attr("executable"));
+				py::print("sys.path =", sys.attr("path"));
+				std::cout << "[Pybind] Python version: " << version << std::endl;
+				std::cout << "[Pybind] Python executable: " << executable << std::endl;
+				
+				/* Add executable directory to path, avoid hard coded paths
+				   determines the directory where the current executable is located and 
+				   adds it to Python's module search path (sys.path) */
+				//char buf[PATH_MAX];
+				//ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf)-1);
+				//if (len != -1) {
+				//	buf[len] = '\0'; // Null-Terminates the String
+				//	string exe_dir = dirname(buf); // Extracts Directory Path
+				//	sys.attr("path").attr("append")(exe_dir); // Adds to Python Path
+				//}
+				
+				std::cout << "[Pybind] Verify critical package versions ..." << std::endl;
+				
+				/* Lapack and Blas */
+				check_lapack_blas_linkage();
+				
+				/* numpy */
+				check_numpy();
+				
+				/* open3d */
+				check_open3d();
+				
+				/* numba */
+				check_numba();
+        		
+				/* pytorch and CUDA */	    
+				check_pytorch_cuda();
+				
+				/* mmcv */
+				check_mmcv();
+
+				/* mmseg */
+				check_mmseg();
+				
+				/* mmdet */
+				check_mmdet();
+				
+				/* mmdet3d */
+				check_mmdet3d();
+
+				/* custom detectors 2D/3D */
+				check_detectors();
+
+				/* Add current directory */
+				
+				std::cout << "[Pybind] Add current directory ..." << std::endl;
+				sys.attr("path").attr("append")("./");
+
+				/* Import object-slam modules */
+				
+				std::cout << "[Pybind] Import utils module ..." << std::endl;
+				py::module io_utils = py::module::import("reconstruct.utils");
+
+				std::cout << "[Pybind] Getting python configs ..." << std::endl;
+				if(!fsSettings["DetectorConfigPath"].empty()) { 
+					std::string pyCfgPath = fsSettings["DetectorConfigPath"].string();
+					pyCfg = io_utils.attr("get_configs")(pyCfgPath);
+					cout << "[Pybind] Loaded Python config from: " << pyCfgPath << endl;
+				} else {
+					throw runtime_error("DetectorConfigPath not specified in settings");
+				}
+					
+				std::cout << "[Pybind] Getting deepsdf decoder ..." << std::endl;    
+				pyDecoder = io_utils.attr("get_decoder")(pyCfg);
+
+				try {
+					py::gil_scoped_acquire acquire;  // Hold GIL for the entire block
+
+					// Enable fault handler for better crash logs
+					py::module::import("faulthandler").attr("enable")();
+
+					// Ensure Python path includes mmdetection3d
+					//sys.attr("path").attr("append")("./Thirdparty/mmdetection3d");
+
+					// Initialize PyTorch and CUDA
+					py::module torch = py::module::import("torch");
+					if (torch.attr("cuda").attr("is_available")().cast<bool>()) {
+						torch.attr("zeros")(1).attr("cuda")();  // Force CUDA init
+					} else {
+						std::cerr << "[WARNING] CUDA not available. Running on CPU." << std::endl;
+					}
+
+					// Verify Shapely
+					try {
+						py::module::import("shapely").attr("__version__");
+					} catch (...) {
+						std::cerr << "Shapely initialization failed" << std::endl;
+						exit(1);
+					}
+
+					// Initialize mmcv and mmdet3d
+					py::module::import("mmcv");
+					py::module::import("mmdet3d");
+					py::module::import("mmdet3d.models");
+
+					// Call the Python function
+					pySequence = py::module::import("reconstruct").attr("get_sequence")(strSequence, pyCfg);
+					if (pySequence.is_none()) {
+						std::cerr << "Error: get_sequence() returned None" << std::endl;
+						exit(-1);
+					}
+					std::cout << "[Pybind] Sequence class: " 
+							  << py::str(pySequence.get_type()).cast<std::string>() 
+							  << std::endl;
+				} catch (const py::error_already_set &e) {
+					std::cerr << "[Pybind] Python error:\n" << e.what() << std::endl;
+					// Re-throw or handle gracefully
+				} catch (const std::exception &e) {
+					std::cerr << "[C++] Exception: " << e.what() << std::endl;
+				}
+
+				/* Initialise */
+				//std::cout << "[Pybind] Initialise python thread ..." << std::endl;
+				//InitThread(); // Ensure proper GIL management in this function.
+
+				/* Release GIL safely */
+				py::gil_scoped_release release; // Only release GIL if needed and safe here.
+			}
+			cout << "[Pybind] Python integration successful" << endl;
+		} catch (const py::error_already_set& e) {
+			std::cerr << "[Pybind] Python error: " << e.what() << std::endl;
+			if(Py_IsInitialized()) {
+				PyErr_Print();
+				py::finalize_interpreter();  // Clean up if initialization failed
+			}
+			exit(-1);
+		} catch (const std::exception& e) {
+			std::cerr << "[Pybind] Standard error: " << e.what() << std::endl;
+			if(Py_IsInitialized()) {
+				py::finalize_interpreter();
+			}
+			exit(-1);
+		}
+	} else {
+		std::cout << "[Pybind] Python integration disabled" << std::endl;
+	}
 
     cv::FileNode node = fsSettings["File.version"];
     if(!node.empty() && node.isString() && node.string() == "1.0"){
@@ -184,19 +375,34 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         mpAtlas->SetInertialSensor();
 
     //Create Drawers. These are used by the Viewer
+	cout << "Setting drawers ..." << endl;
+	cout << strSettingsFile << endl;
     mpFrameDrawer = new FrameDrawer(mpAtlas);
-    mpMapDrawer = new MapDrawer(mpAtlas, strSettingsFile, settings_);
+	mpMapDrawer = new MapDrawer(mpAtlas, strSettingsFile, settings_);
+
+	mpObjectDrawer = new ObjectDrawer(mpAtlas, mpMapDrawer, 
+										strSettingsFile); // FIXME freezes viewer with bStepByStep
+	//mpMapDrawer->SetObjectDrawer(mpObjectDrawer);
 
     //Initialize the Tracking thread
     //(it will live in the main thread of execution, the one that called this constructor)
     cout << "Seq. Name: " << strSequence << endl;
-    mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
-                             mpAtlas, mpKeyFrameDatabase, strSettingsFile, mSensor, settings_, strSequence);
+	cout << "Setting tracker ..." << endl;
+    mpTracker = new Tracking(this, mpVocabulary, 
+								mpFrameDrawer, mpMapDrawer,
+								mpAtlas, mpKeyFrameDatabase,
+								strSettingsFile, mSensor,
+								settings_, strSequence);
 
-    //Initialize the Local Mapping thread and launch
-    mpLocalMapper = new LocalMapping(this, mpAtlas, mSensor==MONOCULAR || mSensor==IMU_MONOCULAR,
-                                     mSensor==IMU_MONOCULAR || mSensor==IMU_STEREO || mSensor==IMU_RGBD, strSequence);
-    mptLocalMapping = new thread(&ORB_SLAM3::LocalMapping::Run,mpLocalMapper);
+	//Initialize the Local Mapping thread and launch
+	cout << "Setting local mapper ..." << endl;
+	cout << strSettingsFile << endl;
+    mpLocalMapper = new LocalMapping(this,
+							mpAtlas,
+							mSensor==MONOCULAR || mSensor==IMU_MONOCULAR,
+							mSensor==IMU_MONOCULAR || mSensor==IMU_STEREO || mSensor==IMU_RGBD,
+							strSequence);
+	mptLocalMapping = new thread(&ORB_SLAM3::LocalMapping::Run,mpLocalMapper);
     mpLocalMapper->mInitFr = initFr;
     if(settings_)
         mpLocalMapper->mThFarPoints = settings_->thFarPoints();
@@ -211,36 +417,183 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         mpLocalMapper->mbFarPoints = false;
 
     //Initialize the Loop Closing thread and launch
-    // mSensor!=MONOCULAR && mSensor!=IMU_MONOCULAR
-    mpLoopCloser = new LoopClosing(mpAtlas, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR, activeLC); // mSensor!=MONOCULAR);
+	// mSensor!=MONOCULAR && mSensor!=IMU_MONOCULAR
+    mpLoopCloser = new LoopClosing(mpAtlas, 
+								mpKeyFrameDatabase, 
+								mpVocabulary, 
+								mSensor!=MONOCULAR, 
+								activeLC); // mSensor!=MONOCULAR);
     mptLoopClosing = new thread(&ORB_SLAM3::LoopClosing::Run, mpLoopCloser);
 
-    //Set pointers between threads
+	//Set pointers between threads
+	cout << "Set pointers between threads in mpTracker ..." << endl;
     mpTracker->SetLocalMapper(mpLocalMapper);
     mpTracker->SetLoopClosing(mpLoopCloser);
 
     mpLocalMapper->SetTracker(mpTracker);
     mpLocalMapper->SetLoopCloser(mpLoopCloser);
 
-    mpLoopCloser->SetTracker(mpTracker);
+	mpLoopCloser->SetTracker(mpTracker);
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
 
-    //usleep(10*1000*1000);
+	//usleep(10*1000*1000);
 
     //Initialize the Viewer thread and launch
+	cout << "Starting the viewer ..." << endl;
     if(bUseViewer)
     //if(false) // TODO
     {
         mpViewer = new Viewer(this, mpFrameDrawer,mpMapDrawer,mpTracker,strSettingsFile,settings_);
         mptViewer = new thread(&Viewer::Run, mpViewer);
         mpTracker->SetViewer(mpViewer);
-        mpLoopCloser->mpViewer = mpViewer;
+		mpLoopCloser->mpViewer = mpViewer;
         mpViewer->both = mpFrameDrawer->both;
-    }
+	}
 
     // Fix verbosity
-    Verbose::SetTh(Verbose::VERBOSITY_DEBUG);
+    Verbose::SetTh(Verbose::VERBOSITY_DEBUG);  // VERBOSITY_QUIET, VERBOSITY_NORMAL, VERBOSITY_DEBUG
 
+	// Object-SLAM
+	if (_use_python)
+    PyEval_ReleaseThread(PyThreadState_Get());
+
+	cout << "Object-slam is alive ..." << endl;
+
+}
+
+void System::check_lapack_blas_linkage() {
+    try {
+        py::module numpy_config = py::module::import("numpy.__config__");
+
+        auto blas_info = numpy_config.attr("get_info")("blas_opt_info");
+        auto lapack_info = numpy_config.attr("get_info")("lapack_opt_info");
+
+        std::cout << "[Pybind] NumPy BLAS linkage: ";
+        if (py::len(blas_info)) {
+            std::cout << py::str(blas_info).cast<std::string>() << std::endl;
+        } else {
+            std::cout << "No optimized BLAS linked" << std::endl;
+        }
+
+        std::cout << "[Pybind] NumPy LAPACK linkage: ";
+        if (py::len(lapack_info)) {
+            std::cout << py::str(lapack_info).cast<std::string>() << std::endl;
+        } else {
+            std::cout << "No optimized LAPACK linked" << std::endl;
+        }
+
+    } catch (const py::error_already_set &e) {
+        std::cerr << "[Pybind] Python exception while checking LAPACK/BLAS linkage:\n"
+                  << e.what() << std::endl;
+    }
+}
+
+void System::check_numpy() {
+	py::module numpy = py::module::import("numpy");
+	string numpy_ver = numpy.attr("__version__").cast<string>();
+	std::cout << "[Pybind] NumPy version: " << numpy_ver << std::endl;        
+	//if (numpy_ver < "1.21.3") { // 1.21.3
+	//	throw runtime_error("[Pybind] NumPy version too old - requires >= 1.19.5");
+	//}
+}
+
+void System::check_open3d() {
+	py::module open3d = py::module::import("open3d");
+	string open3d_ver = open3d.attr("__version__").cast<string>();
+	std::cout << "[Pybind] Open3d version: " << open3d_ver << std::endl;        
+	//if (open3d_ver != "0.18.0") { // 0.18.0
+	//	throw runtime_error("[Pybind] Requires PyTorch version == 0.18.0");
+	//}
+}
+
+void System::check_numba() {
+	py::module numba = py::module::import("numba");
+	string numba_ver = numba.attr("__version__").cast<string>();
+	if (numba_ver != "0.53.0") { // 0.53.0
+		throw runtime_error("[SLAM] Numba version required == 0.53.0");
+	}
+	std::cout << "[Pybind] Numba version: " << numba_ver << std::endl; 
+	numba.attr("config").attr("THREADING_LAYER") = "workqueue";
+	numba.attr("config").attr("DISABLE_JIT") = true;
+}
+
+void System::check_pytorch_cuda() {
+	py::module torch = py::module::import("torch");
+	std::string torch_ver = torch.attr("__version__").cast<std::string>();
+	std::cout << "[Pybind] PyTorch version: " << torch_ver << std::endl;
+	bool torch_cuda = torch.attr("cuda").attr("is_available")().cast<bool>();
+	std::cout << "[Pybind] CUDA available: " << torch_cuda << std::endl;
+	if (torch_ver.rfind("1.12.0", 0) != 0) {  // 1.12.0a0+git67ece03
+		throw std::runtime_error("[SLAM] Requires PyTorch version == 1.12.0");
+	}
+}
+
+void System::check_mmcv() {
+	py::module mmcv = py::module::import("mmcv");
+	std::string mmcv_ver = mmcv.attr("__version__").cast<std::string>();
+	std::cout << "[Pybind] MMCV version: " << mmcv_ver << std::endl;
+	if (mmcv_ver != "1.7.0") {  // 1.7.0
+		throw std::runtime_error("[Pybind] Requires MMCV version == 1.0.0rc6");					
+	}
+}
+				
+void System::check_mmseg() {
+	py::module mmseg = py::module::import("mmseg");
+	std::string mmseg_ver = mmseg.attr("__version__").cast<std::string>();
+	std::cout << "[Pybind] MMSegmentation version: " << mmseg_ver << std::endl;
+	if (mmseg_ver != "0.30.0") {  // 0.30.0
+		throw std::runtime_error("[Pybind] Requires MMSegmentation version == 0.30.0");
+	}
+}				
+
+void System::check_mmdet() {
+	py::module mmdet = py::module::import("mmdet");
+	std::string mmdet_ver = mmdet.attr("__version__").cast<std::string>();
+	std::cout << "[Pybind] MMDetection version: " << mmdet_ver << std::endl;
+	if (mmdet_ver != "2.28.2") {  // 2.28.2
+		throw std::runtime_error("[Pybind] Requires MMDetection version == 2.28.2");
+	}
+}
+				
+void System::check_mmdet3d() {
+	py::module mmdet3d = py::module::import("mmdet3d");
+	std::string mmdet3d_ver = mmdet3d.attr("__version__").cast<std::string>();
+	std::cout << "[Pybind] MMDetection3D version: " << mmdet3d_ver << std::endl;
+	if (mmdet3d_ver != "1.0.0rc6") {  // 1.0.0rc6
+		throw std::runtime_error("[Pybind] Requires PyTorch version == 1.0.0rc6");
+	}
+}
+
+void System::check_detectors() {
+    std::cout << "[Pybind] Checking detectors..." << std::endl;
+
+    if (!Py_IsInitialized()) {
+        std::cerr << "[Pybind] Python not initialized!" << std::endl;
+        throw std::runtime_error("Python not initialized");
+    }
+
+    try {
+        py::gil_scoped_acquire acquire;
+
+        py::module_ detector2d = py::module_::import("reconstruct.detector2d");
+        py::object get_detector2d = detector2d.attr("get_detector2d");
+
+        py::module_ detector3d = py::module_::import("reconstruct.detector3d");
+        py::object get_detector3d = detector3d.attr("get_detector3d");
+
+        if (!py::isinstance<py::function>(get_detector2d) || 
+            !py::isinstance<py::function>(get_detector3d)) {
+            throw std::runtime_error("One or both functions are not callable.");
+        }
+
+        std::cout << "[Pybind] Detector functions found and valid." << std::endl;
+    } catch (const py::error_already_set& e) {
+        std::cerr << "[Pybind] Python error: " << e.what() << std::endl;
+        throw;
+    } catch (const std::exception& e) {
+        std::cerr << "[Pybind] Exception: " << e.what() << std::endl;
+        throw;
+    }
 }
 
 Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timestamp, const vector<IMU::Point>& vImuMeas, string filename)

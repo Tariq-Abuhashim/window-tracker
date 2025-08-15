@@ -16,6 +16,9 @@
 * If not, see <http://www.gnu.org/licenses/>.
 */
 
+/**
+* Tariq updated - Aug, 2025
+**/
 
 #ifndef SYSTEM_H
 #define SYSTEM_H
@@ -31,6 +34,7 @@
 #include "Tracking.h"
 #include "FrameDrawer.h"
 #include "MapDrawer.h"
+#include "ObjectDrawer.h"
 #include "Atlas.h"
 #include "LocalMapping.h"
 #include "LoopClosing.h"
@@ -40,6 +44,29 @@
 #include "ImuTypes.h"
 #include "Settings.h"
 
+// Object-SLAM
+#include "tcp_interface.hpp" // mission-systems
+#include <pybind11/embed.h>
+#include <pybind11/eigen.h>
+#define PY_SSIZE_T_CLEAN
+#include <Python.h>
+#include <numpy/arrayobject.h>
+namespace py = pybind11;
+class PyThreadStateLock
+{
+public:
+    PyThreadStateLock()
+    {
+        state = PyGILState_Ensure();
+    }
+
+    ~PyThreadStateLock()
+    {
+        PyGILState_Release(state);
+    }
+private:
+    PyGILState_STATE state;
+};
 
 namespace ORB_SLAM3
 {
@@ -73,7 +100,6 @@ public:
 
 class Viewer;
 class FrameDrawer;
-class MapDrawer;
 class Atlas;
 class Tracking;
 class LocalMapping;
@@ -90,7 +116,7 @@ public:
         RGBD=2,
         IMU_MONOCULAR=3,
         IMU_STEREO=4,
-        IMU_RGBD=5,
+		IMU_RGBD=5,
     };
 
     // File type
@@ -103,6 +129,11 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     // Initialize the SLAM system. It launches the Local Mapping, Loop Closing and Viewer threads.
     System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor, const bool bUseViewer = true, const int initFr = 0, const string &strSequence = std::string());
+
+	~System() {
+		/* Object-SLAM */
+		finalize();  // Safe to call even if Python isn't initialized
+	}
 
     // Proccess the given stereo frame. Images must be synchronized and rectified.
     // Input images: RGB (CV_8UC3) or grayscale (CV_8U). RGB is converted to grayscale.
@@ -175,6 +206,10 @@ public:
     // See format details at: http://www.cvlibs.net/datasets/kitti/eval_odometry.php
     void SaveTrajectoryKITTI(const string &filename);
 
+	// Object-SLAM
+	void SaveMapCurrentFrame(const string &dir, int frameId);
+    void SaveEntireMap(const string &dir);
+
     // TODO: Save/Load functions
     // SaveMap(const string &filename);
     // LoadMap(const string &filename);
@@ -200,6 +235,45 @@ public:
     void InsertTrackTime(double& time);
 #endif
 
+    /* Object-SLAM */
+    inline void InitThread()
+    {
+        if (!PyEval_ThreadsInitialized())
+        {
+            PyEval_InitThreads();
+        }
+    };
+	/* finalise the interpreter
+	*/
+    inline void finalize() {
+    	if (Py_IsInitialized()) {
+			//py::gil_scoped_acquire acquire; // acquire GIL
+			// Clear Python objects before finalization
+			pySequence = py::object();
+			pyDecoder = py::object();
+			pyCfg = py::object();
+					
+			// Finalize from main thread
+			py::finalize_interpreter();
+		
+			cout << "[SLAM] Python interpreter finalized" << endl;
+		}
+	};
+    py::object pyCfg;
+    py::object pyDecoder;
+    py::object pySequence;
+    
+    bool _debug;
+	bool _use_lidar;
+	bool _use_python;
+    /*
+    #ifdef NDEBUG
+    bool _debug = false;
+    #else
+    bool _debug = true;
+	#endif
+	*/
+
 private:
 
     void SaveAtlas(int type);
@@ -217,7 +291,6 @@ private:
     KeyFrameDatabase* mpKeyFrameDatabase;
 
     // Map structure that stores the pointers to all KeyFrames and MapPoints.
-    //Map* mpMap;
     Atlas* mpAtlas;
 
     // Tracker. It receives a frame and computes the associated camera pose.
@@ -237,10 +310,12 @@ private:
 
     FrameDrawer* mpFrameDrawer;
     MapDrawer* mpMapDrawer;
+    ObjectDrawer* mpObjectDrawer;  // Object-SLAM
 
     // System threads: Local Mapping, Loop Closing, Viewer.
     // The Tracking thread "lives" in the main execution thread that creates the System object.
     std::thread* mptLocalMapping;
+	std::thread* mptObjectMapping;  // Object-SLAM
     std::thread* mptLoopClosing;
     std::thread* mptViewer;
 
@@ -270,6 +345,19 @@ private:
     string mStrVocabularyFilePath;
 
     Settings* settings_;
+
+	// Object-slam
+	void check_lapack_blas_linkage();
+	void check_numpy();
+	void check_open3d();
+	void check_numba();
+	void check_pytorch_cuda();
+	void check_mmcv();
+	void check_mmseg();
+	void check_mmdet();
+	void check_mmdet3d();
+	void check_detectors();
+	
 };
 
 }// namespace ORB_SLAM

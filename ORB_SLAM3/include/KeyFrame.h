@@ -16,6 +16,9 @@
 * If not, see <http://www.gnu.org/licenses/>.
 */
 
+/**
+* Tariq updated - Aug, 2025
+**/
 
 #ifndef KEYFRAME_H
 #define KEYFRAME_H
@@ -38,12 +41,22 @@
 #include <boost/serialization/vector.hpp>
 #include <boost/serialization/map.hpp>
 
+// Object-SLAM
+#include "ObjectDetection.h"
+#include "MapObject.h"
+#include <pybind11/embed.h>
+#include <pybind11/eigen.h>
+namespace py = pybind11;
+
+// COVINS
+//#include "comm/communicator.hpp"
 
 namespace ORB_SLAM3
 {
 
 class Map;
 class MapPoint;
+class MapObject; // Object-SLAM
 class Frame;
 class KeyFrameDatabase;
 
@@ -424,6 +437,21 @@ public:
     //bool mbHasHessian;
     //cv::Mat mHessianPose;
 
+	// Object-SLAM
+    // Variables used in object-based graph optimization
+    int nObj;
+    std::vector<MapObject*> mvpMapObjects; // Associated objects
+    std::vector<ObjectDetection*> mvpDetectedObjects; // Object detections
+    std::map<MapObject*, float> mdAssociatedObjects; // {pMO, dist}, used for comparing distance
+    std::vector<int> keypoint_associate_objectID; // Keypoint-object association, local detected ID
+
+    void AddMapObject(MapObject *pMO, int i);
+    vector<ObjectDetection*> GetObjectDetections();
+    vector<MapObject*> GetMapObjectMatches();
+    void EraseMapObjectMatch(const size_t &idx);
+    void EraseMapObjectMatch(MapObject *pMO);
+    void ReplaceMapObjectMatch(const size_t &idx, MapObject* pMO);
+
     // The following variables need to be accessed trough a mutex to be thread safe.
 protected:
     // sophus poses
@@ -500,6 +528,7 @@ protected:
     std::mutex mMutexConnections;
     std::mutex mMutexFeatures;
     std::mutex mMutexMap;
+	std::mutex mMutexObjects; // Object-SLAM
 
 public:
     GeometricCamera* mpCamera, *mpCamera2;

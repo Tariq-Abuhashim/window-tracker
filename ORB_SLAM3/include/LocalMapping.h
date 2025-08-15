@@ -16,6 +16,9 @@
 * If not, see <http://www.gnu.org/licenses/>.
 */
 
+/**
+* Tariq updated - Aug, 2025
+**/
 
 #ifndef LOCALMAPPING_H
 #define LOCALMAPPING_H
@@ -27,6 +30,9 @@
 #include "KeyFrameDatabase.h"
 #include "Settings.h"
 
+// object-slam
+#include "ObjectDrawer.h"
+
 #include <mutex>
 
 
@@ -37,6 +43,7 @@ class System;
 class Tracking;
 class LoopClosing;
 class Atlas;
+class MapObject; // object-slam
 
 class LocalMapping
 {
@@ -129,6 +136,24 @@ public:
     int nLBA_exec;
     int nLBA_abort;
 #endif
+
+	// Object-SLAM
+    KeyFrame* mpLastKeyFrame;
+    std::list<MapObject*> mlpRecentAddedMapObjects;
+    void GetNewObservations();
+    void CreateNewMapObjects();
+    void MapObjectCulling();
+    void CreateNewObjectsFromDetections();
+    void ProcessDetectedObjects();
+    py::object pyOptimizer;
+    py::object pyMeshExtractor;
+    int nLastReconKFID;
+
+	inline void SetDebug(const bool flag) {
+    	std::cout << "[DEBUG]: LocalMapping debug flag has been set to TRUE\n";
+		_debug = flag;
+    }
+
 protected:
 
     bool CheckNewKeyFrames();
@@ -157,6 +182,7 @@ protected:
     std::mutex mMutexFinish;
 
     Atlas* mpAtlas;
+	ObjectDrawer* mpObjectDrawer; //Object-SLAM
 
     LoopClosing* mpLoopCloser;
     Tracking* mpTracker;
@@ -194,6 +220,11 @@ protected:
 
     //DEBUG
     ofstream f_lm;
+
+	// object-slam
+    bool _debug;
+    bool _use_python;
+    bool _use_lidar;
 
     };
 

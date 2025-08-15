@@ -17,18 +17,22 @@
 */
 
 
+/**
+* Tariq updated - Aug, 2025
+**/
+
 #ifndef MAPPOINT_H
 #define MAPPOINT_H
 
-#include "KeyFrame.h"
-#include "Frame.h"
-#include "Map.h"
-#include "Converter.h"
+#include"KeyFrame.h"
+#include"Frame.h"
+#include"Map.h"
+#include"Converter.h"
 
 #include "SerializationUtils.h"
 
-#include <opencv2/core/core.hpp>
-#include <mutex>
+#include<opencv2/core/core.hpp>
+#include<mutex>
 
 #include <boost/serialization/serialization.hpp>
 #include <boost/serialization/array.hpp>
@@ -159,6 +163,14 @@ public:
 
     void PreSave(set<KeyFrame*>& spKF,set<MapPoint*>& spMP);
     void PostLoad(map<long unsigned int, KeyFrame*>& mpKFid, map<long unsigned int, MapPoint*>& mpMPid);
+
+	// Object-SLAM
+    bool in_any_object;  // Flag indicating the point belongs to an object
+    int object_id; // ID of the associated object
+	int keyframe_id_added_to_object; // KF id when added to object
+	bool mbOutlier;  // Outlier for object
+	void SetOutlierFlag();
+	bool isOutlier();
 
 public:
     long unsigned int mnId;
