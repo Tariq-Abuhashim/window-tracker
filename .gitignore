@@ -1,7 +1,6 @@
 # Ignore build directories
-ORB_SLAM3/Thirdparty/DBoW2/build/
-build/
 */build/
+*/lib/
 
 # CMake build files
 **/CMakeCache.txt
