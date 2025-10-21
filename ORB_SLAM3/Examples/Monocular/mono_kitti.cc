@@ -35,7 +35,7 @@ std::uint64_t to_microseconds(const boost::posix_time::ptime& t) {
 }
 
 void LoadImages(const string &pathSeq, vector<string> &vstrImageLeft,
-                vector<string> &vstrImageRight, vector<double> &vTimeStamps);
+                vector<double> &vTimeStamps);
 
 int main(int argc, char **argv)
 {
@@ -43,7 +43,7 @@ int main(int argc, char **argv)
 	{
 		std::cerr << std::endl << "Usage: " << std::endl;
 		          
-		std::cerr << "./Examples/Stereo/stereo_kitti "
+		std::cerr << "./mono_kitti "
 		          << "Vocabulary/ORBvoc.txt "
 		          << "<path_to_vocabulary> "
 		          << "<path_to_settings> "
@@ -53,13 +53,13 @@ int main(int argc, char **argv)
 
 		std::cerr << std::endl << "Examples:" << std::endl;
 
-		std::cerr << "./Examples/Stereo/stereo_kitti "
+		std::cerr << "./mono_kitti "
 		          << "Vocabulary/ORBvoc.txt "
 		          << "/media/mrt/Whale/data/kitti/07/KITTI04-12.yaml "
 		          << "/media/mrt/Whale/data/kitti/07/"
 		          << std::endl;
 
-		std::cerr << "./Examples/Stereo/stereo_kitti "
+		std::cerr << "./mono_inertial_kitti "
 		          << "Vocabulary/ORBvoc.txt "
 		          << "/media/mrt/Whale/data/kitti/2011_09_30/KITTI.yaml "
 		          << "/media/mrt/Whale/data/kitti/2011_09_30/"
@@ -68,14 +68,14 @@ int main(int argc, char **argv)
 		std::cerr << std::endl << "Debug mode (then type <run>, and backtrace <bt>):" << std::endl;
 		std::cerr << "cmake -DCMAKE_BUILD_TYPE=Debug .. \n";
 		std::cerr << "make -j  \n";
-		std::cerr << "gdb --args ./stereo_kitti "
+		std::cerr << "gdb --args ./mono_kitti "
 		          << "<path_to_vocabulary> "
 		          << "<path_to_settings> "
 		          << "<path_to_seq1> "
 		          << std::endl;
 		          
 		std::cerr << std::endl << "Find memory leaks:" << std::endl;
-		std::cerr << "valgrind ./Examples/Stereo/stereo_kitti "
+		std::cerr << "valgrind ./mono_kitti "
 		          << "<path_to_vocabulary> "
 		          << "<path_to_settings> "
 		          << "<path_to_seq1> "
@@ -88,13 +88,13 @@ int main(int argc, char **argv)
     const string settingsFile = argv[2];
     
     const int num_seq = argc - 3;
-    cout << "[STEREO_KITTI] num_seq = " << num_seq << endl;
+    cout << "[MONO_KITTI] num_seq = " << num_seq << endl;
     bool bFileName= (((argc-3) % 1) == 1);
     string file_name;
     if (bFileName)
     {
         file_name = string(argv[argc-1]);
-        cout << "[STEREO_KITTI] file name: " << file_name << endl;
+        cout << "[MONO_KITTI] file name: " << file_name << endl;
     }
 
     /* Load all sequences: */
@@ -102,7 +102,6 @@ int main(int argc, char **argv)
     // Images
     vector< vector<double> > vTimestampsCam; vTimestampsCam.resize(num_seq);
     vector< vector<string> > vstrImageLeft; vstrImageLeft.resize(num_seq);
-    vector< vector<string> > vstrImageRight; vstrImageRight.resize(num_seq);
     vector<int> nImages; nImages.resize(num_seq);
 	cout << endl << "-------" << endl;
     cout.precision(17);
@@ -112,9 +111,9 @@ int main(int argc, char **argv)
         string pathSeq(argv[(2*seq) + 3]);
         //pathSeq = pathSeq + "2011_09_30_drive_0018_sync/";
 
-        cout << "[STEREO_KITTI] Loading images for sequence " << seq << "...\n";
-        LoadImages(pathSeq, vstrImageLeft[seq], vstrImageRight[seq], vTimestampsCam[seq]);
-        std::cout 	<< "[STEREO_KITTI] Sequence has " 
+        cout << "[MONO_KITTI] Loading images for sequence " << seq << "...\n";
+        LoadImages(pathSeq, vstrImageLeft[seq], vTimestampsCam[seq]);
+        std::cout 	<< "[MONO_KITTI] Sequence has " 
         			<< vstrImageLeft[seq].size() 
         			<< " Images ..." << std::endl;
 
@@ -126,10 +125,11 @@ int main(int argc, char **argv)
 	// Create SLAM system. It initializes all system threads and gets ready to process frames.
 	ORB_SLAM3::System SLAM(vocabFile, 
 						settingsFile, 
-						ORB_SLAM3::System::STEREO, 
+						ORB_SLAM3::System::MONOCULAR, 
 						true, 
 						0, 
 						argv[3]); // FIXME if argv[3] is sequnce path, how to set for (num_seq>1)
+	float imageScale = SLAM.GetImageScale();
 
     // Vector for tracking time statistics
     vector<float> vTimesTrack;
@@ -137,42 +137,41 @@ int main(int argc, char **argv)
     double t_track = 0;
     double ttrack_tot = 0;
 
-    cv::Mat imLeft, imRight;
+    cv::Mat imLeft;
     for (seq = 0; seq<num_seq; seq++)
     {
     	std::cout << std::endl;
-		std::cout << "[STEREO_KITTI] Starting for sequence " << seq << " ..." << std::endl;
+		std::cout << "[MONO_KITTI] Starting for sequence " << seq << " ..." << std::endl;
 
-        // Seq loop
+		// Seq loop
         for(int ni=0; ni<nImages[seq]; ni++)
         {
         	//cout << ni << endl;
         	//cout << vstrImageLeft[seq][ni] << endl;  
         	//cout << vstrImageRight[seq][ni] << endl;
         	  	
-            // Read left and right images from file
+            // Read left images from file
             imLeft = cv::imread(vstrImageLeft[seq][ni],cv::IMREAD_UNCHANGED);
-            imRight = cv::imread(vstrImageRight[seq][ni],cv::IMREAD_UNCHANGED);
 			double tframe = vTimestampsCam[seq][ni];
 			
             if(imLeft.empty())
             {
-                cerr << endl << "[STEREO_KITTI] Failed to load image at: "
+                cerr << endl << "[MONO_KITTI] Failed to load image at: "
                      << vstrImageLeft[seq][ni] << endl;
                 return 1;
             }
-
-            if(imRight.empty())
+            
+            if(imageScale != 1.f)
             {
-                cerr << endl << "[STEREO_KITTI] Failed to load image at: "
-                     << string(vstrImageRight[seq][ni]) << endl;
-                return 1;
+                int width = imLeft.cols * imageScale;
+                int height = imLeft.rows * imageScale;
+                cv::resize(imLeft, imLeft, cv::Size(width, height));
             }
             
             std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
             
             // Pass the images to the SLAM system
-            SLAM.TrackStereo(imLeft,imRight,tframe);
+            SLAM.TrackMonocular(imLeft,tframe);
             
             std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
             t_track = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(t2-t1).count();
@@ -198,7 +197,7 @@ int main(int argc, char **argv)
 		}
 		
 		if(seq < num_seq - 1) {
-			cout << "[STEREO_KITTI] Changing the dataset" << endl;
+			cout << "[MONO_KITTI] Changing the dataset" << endl;
 			//SLAM.ChangeDataset();
 		}
     }
@@ -229,7 +228,7 @@ int main(int argc, char **argv)
 }
 
 void LoadImages(const string &pathSeq, vector<string> &vstrImageLeft,
-                vector<string> &vstrImageRight, vector<double> &vTimeStamps)
+                vector<double> &vTimeStamps)
 {
 
 	std::cout << "[LoadImages] pathSeq := " + pathSeq << std::endl;
@@ -248,11 +247,9 @@ void LoadImages(const string &pathSeq, vector<string> &vstrImageLeft,
 		- SLAM/Object outputs are in /image_00/ frame
 	*/
 	
-	/* stereo, get left and right cameras */
+	/* monocular, only get left camera */
     string strPrefixLeft = pathSeq + "/image_0/";
-    string strPrefixRight = pathSeq + "/image_1/";
-    //string strPrefixLeft = pathSeq + "/image_00/data/";
-    //string strPrefixRight = pathSeq + "/image_01/data/";
+	//string strPrefixLeft = pathSeq + "/image_00/data/";
     
     /* open timestamps file */
     ifstream fTimes;
@@ -266,7 +263,6 @@ void LoadImages(const string &pathSeq, vector<string> &vstrImageLeft,
 
 	vTimeStamps.reserve(5000);
     vstrImageLeft.reserve(5000);
-    vstrImageRight.reserve(5000);
     
     /* read timestamps from file
     	format = yyyy-mm-dd hh:mm:s */
@@ -327,12 +323,10 @@ void LoadImages(const string &pathSeq, vector<string> &vstrImageLeft,
 	
 	/* Assuming timestamps and images are synchronised */
     vstrImageLeft.resize(nTimes);
-    vstrImageRight.resize(nTimes);
     for(int i=0; i<nTimes; i++)
     {
         stringstream ss;
         ss << setfill('0') << setw(6) << i;  // FIXME 6 or 10
         vstrImageLeft[i] = strPrefixLeft + ss.str() + ".png";
-        vstrImageRight[i] = strPrefixRight + ss.str() + ".png";
     }
 }

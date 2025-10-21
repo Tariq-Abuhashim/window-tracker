@@ -392,7 +392,7 @@ public:
 
 private:
 
-	void processImpl() override {
+/*	void processImpl() override {
 		comma::csv::format format(format_);
 		boost::asio::streambuf buffer;
 		auto mutable_buffers = buffer.prepare(format.size());
@@ -401,6 +401,73 @@ private:
 		// Process sensor data based on its type
 		Image reading = processImage(buffer);
 	    addData(reading.header.stamp, reading);
+	} */
+	
+	void processImpl() override {
+		try {
+			// Read fixed 20-byte header
+			boost::asio::streambuf headerBuf;
+			boost::asio::read(*socket_, headerBuf, boost::asio::transfer_exactly(20));
+			const char* headerData = boost::asio::buffer_cast<const char*>(headerBuf.data());
+			
+			// Parse header
+			uint64_t ptime;
+			std::memcpy(&ptime, headerData, sizeof(uint64_t)); 
+			uint32_t height = *reinterpret_cast<const int*>(headerData + 8);
+			uint32_t width = *reinterpret_cast<const int*>(headerData + 12);
+			uint32_t depth = *reinterpret_cast<const int*>(headerData + 16);
+			
+			if (width == 0 || height == 0 || width > 10000 || height > 10000) {
+				std::ostringstream oss;
+				oss << "Invalid image dimensions read from stream: "
+				    << width << "x" << height;
+				throw std::runtime_error(oss.str());
+			}
+			
+			// Compute payload size
+			int channels = 3;
+			size_t expectedBytes = static_cast<size_t>(width) * height * channels;
+			
+			// Read image payload
+			boost::asio::streambuf imgBuf;
+			boost::asio::read(*socket_, imgBuf, boost::asio::transfer_exactly(expectedBytes));
+			const char* imgData = boost::asio::buffer_cast<const char*>(imgBuf.data());
+			
+			// Construct Image
+			Image reading = processImage(ptime, width, height, depth, imgData, expectedBytes);
+			addData(reading.header.stamp, reading);
+		} catch (std::exception& e) {
+			std::cerr << "[ImageReader] Error: " << e.what() << std::endl;
+			throw;
+		}
+		
+	}
+	
+	/* Image specific function */
+	Image processImage(uint64_t ptime, uint32_t width, uint32_t height,
+					uint32_t depth, const char* imgData, size_t dataSize) {
+					
+		int channels = 3;
+    	int cvDepth = (depth == 8) ? CV_8U : CV_8U;
+    	
+    	cv::Mat image(height, width, CV_MAKETYPE(cvDepth, channels));
+    	std::memcpy(image.data, imgData, dataSize);
+    	
+    	Header header;
+		header.seq = 1;
+		header.stamp = ptime;
+		header.frame_id = "camera_frame";
+
+		Image img;
+		img.header = header;
+		img.height = image.rows;
+		img.width = image.cols;
+		img.encoding = "bgr8";
+		img.is_bigendian = false;
+		img.step = image.step[0];
+		img.data.assign(image.datastart, image.dataend);
+
+		return img;
 	}
 
 	/* Image specific function */
@@ -417,19 +484,36 @@ private:
 		// Perform explicit byte-level deserialization by copying the bytes from headerData into a uint64_t variable 
 		uint64_t ptime;
 		std::memcpy(&ptime, headerData, sizeof(uint64_t)); 
-		uint32_t columns = *reinterpret_cast<const int*>(headerData + 8);
-		uint32_t rows = *reinterpret_cast<const int*>(headerData + 12);
-		uint32_t dataType = *reinterpret_cast<const int*>(headerData + 16);
+		uint32_t height = *reinterpret_cast<const int*>(headerData + 8);
+		uint32_t width = *reinterpret_cast<const int*>(headerData + 12);
+		uint32_t depth = *reinterpret_cast<const int*>(headerData + 16);
 		//std::cout << ptime << "-" << columns << "-" << rows << "-" << dataType << std::endl;
-
-		if(buffer.size() < 20 + columns * rows * 3) { // Make sure there's enough data for the image
-			//throw std::runtime_error("handleImageData: Invalid buffer size, for image data.");
+		
+		// Sanity checks
+		if (width == 0 || height == 0 || width > 10000 || height > 10000) {
+		    std::ostringstream oss;
+		    oss << "Invalid image dimensions read from stream: "
+		        << width << "x" << height;
+		    throw std::runtime_error(oss.str());
 		}
+
 		int channels = 3;  // Assuming 3 channels
+		int cvDepth = CV_8U; // Hardcode to 8-bit if your stream is raw RGB data
+    	if (depth == 0 || depth > 8) cvDepth = CV_8U; // ignore bogus field
+				
 		const char* imageData = headerData + 20;  // Skip the 20-byte header
-		cv::Mat image(columns, rows, CV_MAKETYPE(dataType, channels));
-		std::memcpy(image.data, imageData, columns * rows * channels);
-		cv::rotate(image, image, cv::ROTATE_180);
+		size_t expectedBytes = static_cast<size_t>(width) * height * channels;
+		
+		if(buffer.size() < 20 + expectedBytes) { // Make sure there's enough data for the image
+			std::ostringstream oss;
+			oss << "processImage(): buffer too small for image payload. "
+            	<< "Expected " << expectedBytes << " bytes, got " << buffer.size() - 20;
+        	throw std::runtime_error(oss.str());
+		}
+		
+		cv::Mat image(height, width, CV_MAKETYPE(cvDepth, channels));
+		std::memcpy(image.data, imageData, expectedBytes);
+		//cv::rotate(image, image, 0); //cv::ROTATE_90_COUNTERCLOCKWISE, cv::ROTATE_180
 		//std::cout << image.rows << "x" << image.cols << "x" << image.channels() << std::endl;
 		//cv::imwrite("output.jpg", image);
 
@@ -781,7 +865,7 @@ private:
 		nav.header = header;
 
 		// coordinates 2-4
-		for (int i = 0; i < 3; i++) { //coordinates (latitude, longitude, height)
+		for (int i = 0; i < 3; i++) { //orientation/x,orientation/y,orientation/z
             nav.coordinates[i] = *reinterpret_cast<const double*>(data + ptr);
             ptr += sizeof(double);
         }

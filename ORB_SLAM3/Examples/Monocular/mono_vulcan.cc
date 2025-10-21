@@ -67,8 +67,8 @@ int main(int argc, char **argv)
     //vTimesTrack.resize(10000);
 
 	dataQueue imageQueue; // for ImageData
-    ImageReader image_reader(imageQueue,"127.0.0.1", 4001, "t,3ui,s[6912000]"); /* ("127.0.0.1", 4001) */
-	double image_time=-1;
+    ImageReader image_reader(imageQueue,"127.0.0.1", 4001, "t,3ui,s[7062548]"); /* ("127.0.0.1", 4001) */
+	double timestamp=-1;
 
 	// Start threads to read from the sensors
 	std::cout << "\n Start data threads ..." << std::endl;
@@ -90,12 +90,17 @@ int main(int argc, char **argv)
         	}
 			ImageData& image = *actual_image_ptr; // dereferencing
 			Image I = image.getData();
-			image_time = image.getTimestamp()/1e+6;
+			timestamp = image.getTimestamp()/1e+6;
+			
+			// Diagnostics
+			std::cout << "[DEBUG] timestamp(ns)=" << timestamp
+				      << " width=" << I.width << " height=" << I.height
+				      << " data.size=" << I.data.size() << std::endl;
 
 			// get the image
 			cv::Mat im(I.height, I.width, CV_8UC3, I.data.data()); // does not copy the data. If vecData goes out of scope or is modified, the cv::Mat will be affected.
 			cv::cvtColor(im, im, cv::COLOR_BGR2RGB);
-			cv::flip(im, im, 0);
+			//cv::flip(im, im, 0);
 
 #ifdef COMPILEDWITHC11
             //std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
@@ -103,8 +108,8 @@ int main(int argc, char **argv)
             //std::chrono::monotonic_clock::time_point t1 = std::chrono::monotonic_clock::now();
     #endif
             // Pass the image to the SLAM system
-            cout << image_time << endl;
-            SLAM.TrackMonocular(im, image_time);
+            cout << timestamp << endl;
+            SLAM.TrackMonocular(im, timestamp);
 
     #ifdef COMPILEDWITHC11
             //std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();

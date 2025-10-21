@@ -116,9 +116,9 @@ set(SOURCE_FILES
 src/System.cc
 #src/System_util.cc
 src/Tracking.cc
-#src/Tracking_util.cc
+src/Tracking_util.cc
 src/LocalMapping.cc
-#src/LocalMapping_util.cc
+src/LocalMapping_util.cc
 src/LoopClosing.cc
 #src/LoopClosing_util.cc
 src/ORBextractor.cc
@@ -139,7 +139,7 @@ src/ObjectDrawer.cc
 src/ObjectDetection.cc
 src/ObjectRenderer.cc
 src/Optimizer.cc
-#src/Optimizer_util.cc
+src/Optimizer_util.cc
 src/Frame.cc
 src/KeyFrameDatabase.cc
 src/Sim3Solver.cc
@@ -257,13 +257,18 @@ add_executable(mono_euroc
         Examples/Monocular/mono_euroc.cc)
 target_link_libraries(mono_euroc ${PROJECT_NAME})
 
-add_executable(mono_vulcan
+add_executable(mono_kitti  # Mission-Systems
+        Examples/Monocular/mono_kitti.cc)
+target_link_libraries(mono_kitti ${PROJECT_NAME})
+
+add_executable(mono_vulcan  # Mission-Systems
         Examples/Monocular/mono_vulcan.cc)
 target_link_libraries(mono_vulcan ${PROJECT_NAME})
 
-add_executable(mono_geo_vulcan
+add_executable(mono_geo_vulcan  # Mission-Systems
         Examples/Monocular/mono_geo_vulcan.cc)
 target_link_libraries(mono_geo_vulcan ${PROJECT_NAME})
+
 
 #Monocular inertial examples
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Monocular-Inertial)
@@ -276,9 +281,20 @@ add_executable(mono_inertial_vulcan
         Examples/Monocular-Inertial/mono_inertial_vulcan.cc)
 target_link_libraries(mono_inertial_vulcan ${PROJECT_NAME})
 
+add_executable(mono_inertial_kitti
+        Examples/Monocular-Inertial/mono_inertial_kitti.cc)
+target_link_libraries(mono_inertial_kitti ${PROJECT_NAME})
+
 #Stereo examples
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Stereo)
 
-add_executable(stereo_kitti
+add_executable(stereo_kitti  # Mission-Systems
         Examples/Stereo/stereo_kitti.cc)
 target_link_libraries(stereo_kitti ${PROJECT_NAME})
+
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Stereo-Inertial)
+add_executable(stereo_inertial_kitti  # Mission-Systems
+        Examples/Stereo-Inertial/stereo_inertial_kitti.cc)
+target_link_libraries(stereo_inertial_kitti ${PROJECT_NAME})
+
