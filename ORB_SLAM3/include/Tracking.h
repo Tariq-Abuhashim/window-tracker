@@ -391,6 +391,7 @@ protected:
     bool _debug;
     bool _use_python;
     bool _use_lidar;
+    string DetectorConfigFile;
 
 public:
     cv::Mat mImRight;

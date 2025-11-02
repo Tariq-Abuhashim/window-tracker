@@ -80,13 +80,16 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 	/* Object-slam python stuff */
 
 	if(fsSettings["UsePython"].isInt()) {
-		 this->_use_python = (int)fsSettings["UsePython"] != 0;
+		 _use_python = (int)fsSettings["UsePython"] != 0;
 	}
 	if(fsSettings["UseLidar"].isInt()) {
-		 this->_use_lidar = (int)fsSettings["UseLidar"] != 0;
+		 _use_lidar = (int)fsSettings["UseLidar"] != 0;
+	}
+	if(fsSettings["DebugPlots"].isInt()) {
+		 _debug = (int)fsSettings["DebugPlots"] != 0;
 	}
 	
-	if(this->_use_python) {
+	if(_use_python) {
 
 			setenv("OMP_NUM_THREADS", "1", 1);
 			setenv("OPENBLAS_NUM_THREADS", "1", 1);
@@ -226,7 +229,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 					py::module::import("mmdet3d.models");
 
 					// Call the Python function
-					pySequence = py::module::import("reconstruct").attr("get_sequence")(strSequence, pyCfg);
+					pySequence = py::module::import("reconstruct").attr("get_sequence")(strSequence, pyCfg);//, _debug);
 					if (pySequence.is_none()) {
 						std::cerr << "Error: get_sequence() returned None" << std::endl;
 						exit(-1);

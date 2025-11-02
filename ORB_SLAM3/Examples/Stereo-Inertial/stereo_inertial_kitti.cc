@@ -111,9 +111,10 @@ int main(int argc, char **argv)
     for (seq = 0; seq<num_seq; seq++)
     {
         string pathSeq(argv[(2*seq) + 3]);
-
+		pathSeq = pathSeq+"2011_09_30_drive_0018_sync/";
+		
         cout << "[STEREO_INERTIAL_KITTI] Loading images for sequence " << seq << "...\n";
-        LoadImages(pathSeq+"2011_09_30_drive_0018_sync/", vstrImageLeft[seq], vstrImageRight[seq], vTimestampsCam[seq]);
+        LoadImages(pathSeq, vstrImageLeft[seq], vstrImageRight[seq], vTimestampsCam[seq]);
         std::cout 	<< "[STEREO_INERTIAL_KITTI] Sequence has " 
         			<< vstrImageLeft[seq].size() 
         			<< " Images ..." << std::endl;
@@ -151,7 +152,7 @@ int main(int argc, char **argv)
 						ORB_SLAM3::System::IMU_STEREO, 
 						true, 
 						0, 
-						argv[3]); // FIXME if argv[3] is sequnce path, how to set for (num_seq>1)
+						argv[(2*seq) + 3]);
 
     // Vector for tracking time statistics
     vector<float> vTimesTrack;

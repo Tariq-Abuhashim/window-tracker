@@ -32,9 +32,9 @@ export LIMAP_CONFIG=cfgs/triangulation/default_fast.yaml # this is relative to l
 
 mkdir -p $WORKSPACE
 
-run_orbslam=false
+run_orbslam=true
 run_limap=false
-run_tracking=true
+run_tracking=false
 
 # Run ORBSLAM
 if [ "$run_orbslam" = true ]; then

@@ -29,6 +29,8 @@
 #include "MLPnPsolver.h"
 #include "GeometricTools.h"
 
+#include "ObjectDetection.h" // Object-SLAM
+
 #include <iostream>
 
 #include <mutex>
@@ -46,7 +48,8 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     mbOnlyTracking(false), mbMapUpdated(false), mbVO(false), mpORBVocabulary(pVoc), mpKeyFrameDB(pKFDB),
     mbReadyToInitializate(false), mpSystem(pSys), mpViewer(NULL), bStepByStep(false),
     mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpAtlas(pAtlas), mnLastRelocFrameId(0), time_recently_lost(5.0),
-    mnInitialFrameId(0), mbCreatedMap(false), mnFirstFrameId(0), mpCamera2(nullptr), mpLastKeyFrame(static_cast<KeyFrame*>(NULL))
+    mnInitialFrameId(0), mbCreatedMap(false), mnFirstFrameId(0), mpCamera2(nullptr), mpLastKeyFrame(static_cast<KeyFrame*>(NULL)),
+    _use_python(pSys->_use_python), _debug(pSys->_debug)
 {
     // Load camera parameters from settings file
     if(settings){
@@ -92,6 +95,15 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
 
             }
         }
+        
+		// Object-SLAM
+		if (_use_python) {
+			if (sensor == System::MONOCULAR || sensor == System::IMU_MONOCULAR) {
+				maskErrosion = fSettings["Objects.maskErrosion"];
+			}
+			DetectorConfigFile = fSettings["DetectorConfigPath"].string();
+		}
+        
     }
 
     initID = 0; lastID = 0;
@@ -128,6 +140,7 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     vdNewKF_ms.clear();
     vdTrackTotal_ms.clear();
 #endif
+
 }
 
 #ifdef REGISTER_TIMES
@@ -2370,6 +2383,11 @@ void Tracking::StereoInitialization()
 
         // Create KeyFrame
         KeyFrame* pKFini = new KeyFrame(mCurrentFrame,mpAtlas->GetCurrentMap(),mpKeyFrameDB);
+        
+        // Object-SLAM
+        if (_use_python && mpSystem->HasLiDAR()) {
+        GetObjectDetectionsLiDAR(pKFini);
+        }
 
         // Insert KeyFrame in the map
         mpAtlas->AddKeyFrame(pKFini);
@@ -3334,6 +3352,50 @@ void Tracking::CreateNewKeyFrame()
             //Verbose::PrintMess("new mps for stereo KF: " + to_string(nPoints), Verbose::VERBOSITY_NORMAL);
         }
     }
+    
+    // Object-SLAM
+	if (mpSystem->_use_python && mState == Tracking::OK)
+	{
+		// --- Stereo mode ---
+		if ((mSensor == System::STEREO || mSensor == System::IMU_STEREO))
+		{
+			if (mpSystem->HasLiDAR()) {
+				// Stereo + LiDAR fusion
+				GetObjectDetectionsLiDAR(pKF);
+				if (!pKF->GetObjectDetections().empty() && !mpAtlas->GetAllMapObjects().empty())
+				    ObjectDataAssociation(pKF);
+			}
+			else
+			{
+				// Pure stereo
+				//GetObjectDetectionsStereo(pKF);
+				//if (!pKF->GetObjectDetections().empty() && !mpAtlas->GetAllMapObjects().empty())
+				//    ObjectDataAssociation(pKF);
+			}
+		} // if stereo
+		
+		// --- Monocular mode ---
+		else if (mSensor == System::MONOCULAR || mSensor == System::IMU_MONOCULAR)
+		{
+		    if (mpSystem->HasLiDAR())
+		    {
+		        // Mono + LiDAR
+		        //GetObjectDetectionsLiDAR(pKF);
+		        //if (!pKF->GetObjectDetections().empty() && !mpAtlas->GetAllMapObjects().empty())
+		        //    ObjectDataAssociation(pKF);
+		    }
+		    else
+		    {
+		        // Pure monocular (2D)
+		        //GetObjectDetectionsMono(pKF);
+		        //if (!pKF->GetObjectDetections().empty() && !mpAtlas->GetAllMapObjects().empty())
+		        //{
+		            // Object association can be projection-based, not depth-based
+		            // AssociateObjectsByProjection(pKF);
+		        //}
+		    }
+		} // if monocular
+	} // if python
 
 
     mpLocalMapper->InsertKeyFrame(pKF);
@@ -3456,7 +3518,6 @@ void Tracking::UpdateLocalPoints()
         }
     }
 }
-
 
 void Tracking::UpdateLocalKeyFrames()
 {

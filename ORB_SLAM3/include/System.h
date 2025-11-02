@@ -264,7 +264,6 @@ public:
     py::object pySequence;
     
     bool _debug;
-	bool _use_lidar;
 	bool _use_python;
     /*
     #ifdef NDEBUG
@@ -273,8 +272,14 @@ public:
     bool _debug = true;
 	#endif
 	*/
+	
+	bool HasLiDAR() const {
+		return _use_lidar;
+	}
 
 private:
+
+	bool _use_lidar;
 
     void SaveAtlas(int type);
     bool LoadAtlas(int type);

@@ -96,7 +96,7 @@ void Optimizer::JointBundleAdjustment(const vector<KeyFrame *> &vpKFs, const vec
         if (pMP->isBad())
             continue;
         g2o::VertexSBAPointXYZ *vPoint = new g2o::VertexSBAPointXYZ();
-        vPoint->setEstimate(Converter::toVector3d(pMP->GetWorldPos()));
+        vPoint->setEstimate(pMP->GetWorldPos().cast<double>());
         const int id = pMP->mnId + maxKFid + 1;
         vPoint->setId(id);
         vPoint->setMarginalized(true);
@@ -257,10 +257,9 @@ void Optimizer::JointBundleAdjustment(const vector<KeyFrame *> &vpKFs, const vec
         g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pKF->mnId));
         g2o::SE3Quat SE3quat = vSE3->estimate();
         if (nLoopKF == 0) {
-            pKF->SetPose(Converter::toCvMat(SE3quat));
+            pKF->SetPose(Sophus::SE3f(SE3quat.rotation().cast<float>(), SE3quat.translation().cast<float>()));
         } else {
-            pKF->mTcwGBA.create(4, 4, CV_32F);
-            Converter::toCvMat(SE3quat).copyTo(pKF->mTcwGBA);
+            pKF->mTcwGBA = Sophus::SE3d(SE3quat.rotation(),SE3quat.translation()).cast<float>();
             pKF->mnBAGlobalForKF = nLoopKF;
         }
     }
@@ -278,11 +277,10 @@ void Optimizer::JointBundleAdjustment(const vector<KeyFrame *> &vpKFs, const vec
                 pMP->mnId + maxKFid + 1));
 
         if (nLoopKF == 0) {
-            pMP->SetWorldPos(Converter::toCvMat(vPoint->estimate()));
+            pMP->SetWorldPos(vPoint->estimate().cast<float>());
             pMP->UpdateNormalAndDepth();
         } else {
-            pMP->mPosGBA.create(3, 1, CV_32F);
-            Converter::toCvMat(vPoint->estimate()).copyTo(pMP->mPosGBA);
+            pMP->mPosGBA = vPoint->estimate().cast<float>();
             pMP->mnBAGlobalForKF = nLoopKF;
         }
     }
@@ -465,7 +463,7 @@ void Optimizer::LocalJointBundleAdjustment(KeyFrame *pKF, bool *pbStopFlag, Map 
     {
         MapPoint* pMP = *lit;
         g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();
-        vPoint->setEstimate(Converter::toVector3d(pMP->GetWorldPos()));
+        vPoint->setEstimate(pMP->GetWorldPos().cast<double>());
         int id = pMP->mnId+maxKFid+1;
         vPoint->setId(id);
         vPoint->setMarginalized(true);
@@ -1017,7 +1015,7 @@ void Optimizer::LocalJointBundleAdjustment(KeyFrame *pKF, bool *pbStopFlag, Map 
     {
         MapPoint* pMP = *lit;
         g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();
-        vPoint->setEstimate(Converter::toVector3d(pMP->GetWorldPos()));
+        vPoint->setEstimate(pMP->GetWorldPos().cast<double>());
         int id = pMP->mnId+maxKFid+1;
         vPoint->setId(id);
         vPoint->setMarginalized(true);
@@ -1334,7 +1332,7 @@ void Optimizer::LocalJointBundleAdjustment(KeyFrame *pKF, bool *pbStopFlag, Map 
         KeyFrame* pKF = *lit;
         g2o::VertexSE3Expmap* vSE3 = static_cast<g2o::VertexSE3Expmap*>(optimizer.vertex(pKF->mnId));
         g2o::SE3Quat SE3quat = vSE3->estimate();
-        pKF->SetPose(Converter::toCvMat(SE3quat));
+        pKF->SetPose(Sophus::SE3f(SE3quat.rotation().cast<float>(), SE3quat.translation().cast<float>()));
     }
 
     //Points
@@ -1342,7 +1340,7 @@ void Optimizer::LocalJointBundleAdjustment(KeyFrame *pKF, bool *pbStopFlag, Map 
     {
         MapPoint* pMP = *lit;
         g2o::VertexSBAPointXYZ* vPoint = static_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(pMP->mnId+maxKFid+1));
-        pMP->SetWorldPos(Converter::toCvMat(vPoint->estimate()));
+        pMP->SetWorldPos(vPoint->estimate().cast<float>());
         pMP->UpdateNormalAndDepth();
     }
 
@@ -1676,12 +1674,7 @@ void Optimizer::LocalJointInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap,
             vegr[i] = new EdgeGyroRW();
             vegr[i]->setVertex(0,VG1);
             vegr[i]->setVertex(1,VG2);
-            cv::Mat cvInfoG = pKFi->mpImuPreintegrated->C.rowRange(9,12).colRange(9,12).inv(cv::DECOMP_SVD);
-            Eigen::Matrix3d InfoG;
-
-            for(int r=0;r<3;r++)
-                for(int c=0;c<3;c++)
-                    InfoG(r,c)=cvInfoG.at<float>(r,c);
+            Eigen::Matrix3d InfoG = pKFi->mpImuPreintegrated->C.block<3,3>(9,9).cast<double>().inverse();        
             vegr[i]->setInformation(InfoG);
             optimizer.addEdge(vegr[i]);
             num_edges++;
@@ -1689,11 +1682,7 @@ void Optimizer::LocalJointInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap,
             vear[i] = new EdgeAccRW();
             vear[i]->setVertex(0,VA1);
             vear[i]->setVertex(1,VA2);
-            cv::Mat cvInfoA = pKFi->mpImuPreintegrated->C.rowRange(12,15).colRange(12,15).inv(cv::DECOMP_SVD);
-            Eigen::Matrix3d InfoA;
-            for(int r=0;r<3;r++)
-                for(int c=0;c<3;c++)
-                    InfoA(r,c)=cvInfoA.at<float>(r,c);
+            Eigen::Matrix3d InfoA = pKFi->mpImuPreintegrated->C.block<3,3>(12,12).cast<double>().inverse();
             vear[i]->setInformation(InfoA);           
 
             optimizer.addEdge(vear[i]);
@@ -1760,7 +1749,7 @@ void Optimizer::LocalJointInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap,
     {
         MapPoint* pMP = *lit;
         g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();
-        vPoint->setEstimate(Converter::toVector3d(pMP->GetWorldPos()));
+        vPoint->setEstimate(pMP->GetWorldPos().cast<double>());
 
         unsigned long id = pMP->mnId+iniMPid+1;
         vPoint->setId(id);
@@ -2056,14 +2045,14 @@ void Optimizer::LocalJointInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap,
         KeyFrame* pKFi = vpOptimizableKFs[i];
 
         VertexPose* VP = static_cast<VertexPose*>(optimizer.vertex(pKFi->mnId));
-        cv::Mat Tcw = Converter::toCvSE3(VP->estimate().Rcw[0], VP->estimate().tcw[0]);
+        Sophus::SE3f Tcw(VP->estimate().Rcw[0].cast<float>(), VP->estimate().tcw[0].cast<float>());
         pKFi->SetPose(Tcw);
         pKFi->mnBALocalForKF=0;
 
         if(pKFi->bImu)
         {
             VertexVelocity* VV = static_cast<VertexVelocity*>(optimizer.vertex(maxKFid+3*(pKFi->mnId)+1));
-            pKFi->SetVelocity(Converter::toCvMat(VV->estimate()));
+            pKFi->SetVelocity(VV->estimate().cast<float>());
             VertexGyroBias* VG = static_cast<VertexGyroBias*>(optimizer.vertex(maxKFid+3*(pKFi->mnId)+2));
             VertexAccBias* VA = static_cast<VertexAccBias*>(optimizer.vertex(maxKFid+3*(pKFi->mnId)+3));
             Vector6d b;
@@ -2078,7 +2067,7 @@ void Optimizer::LocalJointInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap,
     {
         KeyFrame* pKFi = *it;
         VertexPose* VP = static_cast<VertexPose*>(optimizer.vertex(pKFi->mnId));
-        cv::Mat Tcw = Converter::toCvSE3(VP->estimate().Rcw[0], VP->estimate().tcw[0]);
+        Sophus::SE3f Tcw(VP->estimate().Rcw[0].cast<float>(), VP->estimate().tcw[0].cast<float>());
         pKFi->SetPose(Tcw);
         pKFi->mnBALocalForKF=0;
     }
@@ -2088,7 +2077,7 @@ void Optimizer::LocalJointInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap,
     {
         MapPoint* pMP = *lit;
         g2o::VertexSBAPointXYZ* vPoint = static_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(pMP->mnId+iniMPid+1));
-        pMP->SetWorldPos(Converter::toCvMat(vPoint->estimate()));
+        pMP->SetWorldPos(vPoint->estimate().cast<float>());
         pMP->UpdateNormalAndDepth();
     }
 
@@ -2271,11 +2260,7 @@ void Optimizer::FullInertialJointBA(Map *pMap, int its, const bool bFixLocal, co
                     EdgeGyroRW* egr= new EdgeGyroRW();
                     egr->setVertex(0,VG1);
                     egr->setVertex(1,VG2);
-                    cv::Mat cvInfoG = pKFi->mpImuPreintegrated->C.rowRange(9,12).colRange(9,12).inv(cv::DECOMP_SVD);
-                    Eigen::Matrix3d InfoG;
-                    for(int r=0;r<3;r++)
-                        for(int c=0;c<3;c++)
-                            InfoG(r,c)=cvInfoG.at<float>(r,c);
+                    Eigen::Matrix3d InfoG = pKFi->mpImuPreintegrated->C.block<3,3>(9,9).cast<double>().inverse();
                     egr->setInformation(InfoG);
                     egr->computeError();
                     optimizer.addEdge(egr);
@@ -2283,11 +2268,7 @@ void Optimizer::FullInertialJointBA(Map *pMap, int its, const bool bFixLocal, co
                     EdgeAccRW* ear = new EdgeAccRW();
                     ear->setVertex(0,VA1);
                     ear->setVertex(1,VA2);
-                    cv::Mat cvInfoA = pKFi->mpImuPreintegrated->C.rowRange(12,15).colRange(12,15).inv(cv::DECOMP_SVD);
-                    Eigen::Matrix3d InfoA;
-                    for(int r=0;r<3;r++)
-                        for(int c=0;c<3;c++)
-                            InfoA(r,c)=cvInfoA.at<float>(r,c);
+                    Eigen::Matrix3d InfoA = pKFi->mpImuPreintegrated->C.block<3,3>(12,12).cast<double>().inverse();
                     ear->setInformation(InfoA);
                     ear->computeError();
                     optimizer.addEdge(ear);
@@ -2305,14 +2286,18 @@ void Optimizer::FullInertialJointBA(Map *pMap, int its, const bool bFixLocal, co
         g2o::HyperGraph::Vertex* VG = optimizer.vertex(4*maxKFid+2);
         g2o::HyperGraph::Vertex* VA = optimizer.vertex(4*maxKFid+3);
 
+		// Add prior to comon biases
+        Eigen::Vector3f bprior;
+        bprior.setZero();
+        
         // Add prior to comon biases
-        EdgePriorAcc* epa = new EdgePriorAcc(cv::Mat::zeros(3,1,CV_32F));
+        EdgePriorAcc* epa = new EdgePriorAcc(bprior);
         epa->setVertex(0,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VA));
         double infoPriorA = priorA; //
         epa->setInformation(infoPriorA*Eigen::Matrix3d::Identity());
         optimizer.addEdge(epa);
 
-        EdgePriorGyro* epg = new EdgePriorGyro(cv::Mat::zeros(3,1,CV_32F));
+        EdgePriorGyro* epg = new EdgePriorGyro(bprior);
         epg->setVertex(0,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VG));
         double infoPriorG = priorG; //
         epg->setInformation(infoPriorG*Eigen::Matrix3d::Identity());
@@ -2339,7 +2324,7 @@ void Optimizer::FullInertialJointBA(Map *pMap, int its, const bool bFixLocal, co
         if (pMP->isBad()) // TARIQ ADDED
             continue;
         g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();
-        vPoint->setEstimate(Converter::toVector3d(pMP->GetWorldPos()));
+        vPoint->setEstimate(pMP->GetWorldPos().cast<double>());
         unsigned long id = pMP->mnId + iniMPid + 1;
         vPoint->setId(id);
         vPoint->setMarginalized(true);
@@ -2539,14 +2524,12 @@ void Optimizer::FullInertialJointBA(Map *pMap, int its, const bool bFixLocal, co
         VertexPose* VP = static_cast<VertexPose*>(optimizer.vertex(pKFi->mnId));
         if(nLoopId==0)
         {
-            cv::Mat Tcw = Converter::toCvSE3(VP->estimate().Rcw[0], VP->estimate().tcw[0]);
+            Sophus::SE3f Tcw(VP->estimate().Rcw[0].cast<float>(), VP->estimate().tcw[0].cast<float>());
             pKFi->SetPose(Tcw);
         }
         else
         {
-            pKFi->mTcwGBA = cv::Mat::eye(4,4,CV_32F);
-            Converter::toCvMat(VP->estimate().Rcw[0]).copyTo(pKFi->mTcwGBA.rowRange(0,3).colRange(0,3));
-            Converter::toCvMat(VP->estimate().tcw[0]).copyTo(pKFi->mTcwGBA.rowRange(0,3).col(3));
+            pKFi->mTcwGBA = Sophus::SE3f(VP->estimate().Rcw[0].cast<float>(),VP->estimate().tcw[0].cast<float>());
 			pKFi->mnBAGlobalForKF = nLoopId;
 
         }
@@ -2555,11 +2538,11 @@ void Optimizer::FullInertialJointBA(Map *pMap, int its, const bool bFixLocal, co
             VertexVelocity* VV = static_cast<VertexVelocity*>(optimizer.vertex(maxKFid+3*(pKFi->mnId)+1));
             if(nLoopId==0)
             {
-                pKFi->SetVelocity(Converter::toCvMat(VV->estimate()));
+                pKFi->SetVelocity(VV->estimate().cast<float>());
             }
             else
             {
-                pKFi->mVwbGBA = Converter::toCvMat(VV->estimate());
+                pKFi->mVwbGBA = VV->estimate().cast<float>();
             }
 
             VertexGyroBias* VG;
@@ -2600,13 +2583,12 @@ void Optimizer::FullInertialJointBA(Map *pMap, int its, const bool bFixLocal, co
 
         if(nLoopId==0)
         {
-            pMP->SetWorldPos(Converter::toCvMat(vPoint->estimate()));
+            pMP->SetWorldPos(vPoint->estimate().cast<float>());
             pMP->UpdateNormalAndDepth();
         }
         else
         {
-            pMP->mPosGBA.create(3,1,CV_32F);
-            Converter::toCvMat(vPoint->estimate()).copyTo(pMP->mPosGBA);
+            pMP->mPosGBA = vPoint->estimate().cast<float>();
             pMP->mnBAGlobalForKF = nLoopId;
         }
 

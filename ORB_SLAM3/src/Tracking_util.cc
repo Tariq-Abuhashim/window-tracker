@@ -22,7 +22,7 @@ void Tracking::GetObjectDetectionsLiDAR(KeyFrame *pKF) {
 
     PyThreadStateLock PyThreadLock;
     int count = 0;
-	py::list detections = mpSystem->pySequence.attr("get_frame_by_id")(pKF->mnFrameId);//, false);
+	py::list detections = mpSystem->pySequence.attr("get_frame_by_id")(pKF->mnFrameId);
 	for (auto det : detections) {
 		auto pts = det.attr("surface_points").cast<Eigen::MatrixXf>();
 		auto Sim3Tco = det.attr("T_cam_obj").cast<Eigen::Matrix4f>();
@@ -55,10 +55,11 @@ void Tracking::GetObjectDetectionsLiDAR(KeyFrame *pKF) {
 void Tracking::ObjectDataAssociation(KeyFrame *pKF)
 {
     vector<MapObject *> vpLocalMapObjects;
+    vpLocalMapObjects.reserve(mvpLocalKeyFrames.size()); // Pre-reserve memory
     // Loop over all the local frames to find matches
     for (KeyFrame *plKF : mvpLocalKeyFrames)
     {
-        vector<MapObject *> vpMOs = plKF->GetMapObjectMatches();
+        std::vector<MapObject *> vpMOs = plKF->GetMapObjectMatches();
         for (MapObject *pMO : vpMOs)
         {
             if (pMO)
@@ -75,60 +76,59 @@ void Tracking::ObjectDataAssociation(KeyFrame *pKF)
     if (vpLocalMapObjects.empty())
         return;
 
-    Eigen::Matrix4f Tcw = Converter::toMatrix4f(mCurrentFrame.mTcw);
-    Eigen::Matrix3f Rcw = Tcw.topLeftCorner<3, 3>();
-    Eigen::Vector3f tcw = Tcw.topRightCorner<3, 1>();
+    Sophus::SE3<float> Tcw = mCurrentFrame.GetPose(); // return mTcw (mCurrentFrame.mTcw is private)
+    Eigen::Matrix3f Rcw = Tcw.so3().matrix();
+    Eigen::Vector3f tcw = Tcw.translation(); 
     auto vDetections = pKF->mvpDetectedObjects;
     // loop over all the detections.
     for (int i = 0; i < pKF->nObj; i++)
     {
         auto det = vDetections[i];
-        Eigen::Vector3f transDet = det->tco;
-        vector<float> dist;
-
+        const Eigen::Vector3f transDet = det->tco;
+        
+        std::vector<float> dist;
+		dist.reserve(vpLocalMapObjects.size());
+		
+		auto computeDist = [&](const Eigen::Vector3f& objPos) {
+    		Eigen::Vector3f d3 = Rcw * objPos + tcw - transDet;
+    		return Eigen::Vector2f(d3[0], d3[2]).norm();
+		};
+		
         for (auto pObj : vpLocalMapObjects)
         {
-            if (!pObj || pObj->isBad())
-            {
-                dist.push_back(1000.0);
+            if (!pObj || pObj->isBad()) {
+                dist.push_back(1000.0f);
                 continue;
             }
 
-            if (!pObj->isDynamic()) {
-                Eigen::Vector3f dist3D = Rcw * pObj->two + tcw - transDet;
-                Eigen::Vector2f dist2D;
-                dist2D << dist3D[0], dist3D[2];
-                dist.push_back((dist2D).norm());
+            if (pObj->isDynamic()) {
+				float deltaT = (float)(mCurrentFrame.mnId - mpLastKeyFrame->mnFrameId);
+                dist.push_back(computeDist(pObj->two+pObj->velocity*deltaT));
             }
-            else
-            {
-                float deltaT = (float) (mCurrentFrame.mnId - mpLastKeyFrame->mnFrameId);
-                auto twoPredicted = pObj->two + pObj->velocity * deltaT;
-                Eigen::Vector3f dist3D = Rcw * twoPredicted + tcw - transDet;
-                Eigen::Vector2f dist2D;
-                dist2D << dist3D[0], dist3D[2];
-                dist.push_back((dist2D).norm());
+            else {
+            	dist.push_back(computeDist(pObj->two));
             }
         }
-        float minDist = *min_element(dist.begin(), dist.end());
+        
+        //float minDist = *min_element(dist.begin(), dist.end());
+        auto it = std::min_element(dist.begin(), dist.end());
+        float minDist = *it;
 
         // Start with a loose threshold
-        if (minDist < 5.0)
+        if (minDist < 5.0f)
         {
             det->isNew = false;
-            if (det->nPts < 25) // FIXME number of points in detection (default is 25)
-                det->isGood = false;
+			det->isGood = (det->nPts >= 25); // number of points in detection (default is 25)
 
-            int idx = min_element(dist.begin(), dist.end()) - dist.begin();
+			int idx = std::distance(dist.begin(), it);
             MapObject *pMO = vpLocalMapObjects[idx];
             if (!pKF->mdAssociatedObjects.count(pMO)) {
                 pKF->mdAssociatedObjects[pMO] = minDist;
                 pKF->AddMapObject(pMO, i);
                 pMO->AddObservation(pKF, i);
-            } else // Another detection is associated with pMO, compare distance
-            {
+            } else {// Another detection is associated with pMO, compare distance
                 if (minDist < pKF->mdAssociatedObjects[pMO]) {
-                    // cout << "Associated to: " << pMO->mnId << ", Distance: " << minDist << endl;
+                    cout << "Associated to: " << pMO->mnId << ", Distance: " << minDist << endl;
                     pKF->mdAssociatedObjects[pMO] = minDist;
                     int detId = pMO->GetObservations()[pKF];
                     pKF->EraseMapObjectMatch(detId);
@@ -138,11 +138,9 @@ void Tracking::ObjectDataAssociation(KeyFrame *pKF)
                 }
             }
         }
-        else
-        {
+        else {
             det->isNew = true;
-            if (det->nPts < 50) // FIXME number of points in detection (default is 50)
-                det->isGood = false;
+            det->isGood = (det->nPts >= 50); // number of points in detection (default is 50)
         }
     }
 }
@@ -199,6 +197,11 @@ void Tracking::GetObjectDetectionsMono(KeyFrame *pKF)
     }
     pKF->nObj = pKF->mvpDetectedObjects.size();
     pKF->mvpMapObjects = vector<MapObject *>(pKF->nObj, static_cast<MapObject *>(NULL));
+    
+    std::cout << "Mono Detections:";
+    std::cout << " KF: " << pKF->mnId;
+    std::cout << " 2D masks: " << pKF->mvpDetectedObjects.size();
+    std::cout << std::endl;
 
 }
 

@@ -151,7 +151,7 @@ int main(int argc, char **argv)
 						ORB_SLAM3::System::IMU_MONOCULAR, 
 						true, 
 						0, 
-						argv[3]); // FIXME if argv[3] is sequnce path, how to set for (num_seq>1)
+						argv[(2*seq) + 3]);
 	float imageScale = SLAM.GetImageScale();
 
     // Vector for tracking time statistics

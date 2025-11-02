@@ -49,6 +49,17 @@ LocalMapping::LocalMapping(System* pSys, Atlas *pAtlas, const float bMonocular, 
     nLBA_abort = 0;
 #endif
 
+	// Object-SLAM
+	if (mpSystem->_use_python) {
+		py::module optim  = py::module::import("reconstruct.optimizer");
+		pyOptimizer = optim.attr("Optimizer")(pSys->pyDecoder, pSys->pyCfg);
+		pyMeshExtractor = optim.attr("MeshExtractor")(pSys->pyDecoder, 
+													pSys->pyCfg.attr("optimizer").attr("code_len"), 
+													pSys->pyCfg.attr("voxels_dim"));
+		nLastReconKFID = 0;
+	}
+	mpLastKeyFrame = static_cast<KeyFrame*>(NULL);
+
 }
 
 void LocalMapping::SetLoopCloser(LoopClosing* pLoopCloser)
@@ -145,13 +156,55 @@ void LocalMapping::Run()
                             }
                         }
 
-                        bool bLarge = ((mpTracker->GetMatchesInliers()>75)&&mbMonocular)||((mpTracker->GetMatchesInliers()>100)&&!mbMonocular);
-                        Optimizer::LocalInertialBA(mpCurrentKeyFrame, &mbAbortBA, mpCurrentKeyFrame->GetMap(),num_FixedKF_BA,num_OptKF_BA,num_MPs_BA,num_edges_BA, bLarge, !mpCurrentKeyFrame->GetMap()->GetIniertialBA2());
+                        bool bLarge = 	((mpTracker->GetMatchesInliers()>75)&&mbMonocular)||
+                        				((mpTracker->GetMatchesInliers()>100)&&!mbMonocular);
+          /*              				
+                        if (mpSystem->_use_python) {
+                        Optimizer::LocalJointInertialBA(mpCurrentKeyFrame, 
+                        								&mbAbortBA,
+                        								mpCurrentKeyFrame->GetMap(),
+                        								num_FixedKF_BA,
+                        								num_OptKF_BA,
+                        								num_MPs_BA,
+                        								num_edges_BA,
+                        								bLarge,
+                        								!mpCurrentKeyFrame->GetMap()->GetIniertialBA2());
+                        } else {
+           */
+                        Optimizer::LocalInertialBA(mpCurrentKeyFrame, 
+                        						   &mbAbortBA, 
+                        						   mpCurrentKeyFrame->GetMap(),
+                        						   num_FixedKF_BA,
+                        						   num_OptKF_BA,
+                        						   num_MPs_BA,
+                        						   num_edges_BA, 
+                        						   bLarge, 
+                        						   !mpCurrentKeyFrame->GetMap()->GetIniertialBA2());
+           //             }
                         b_doneLBA = true;
                     }
                     else
                     {
-                        Optimizer::LocalBundleAdjustment(mpCurrentKeyFrame,&mbAbortBA, mpCurrentKeyFrame->GetMap(),num_FixedKF_BA,num_OptKF_BA,num_MPs_BA,num_edges_BA);
+            /*        
+                    	if (mpSystem->_use_python) {
+                    	Optimizer::LocalJointBundleAdjustment(mpCurrentKeyFrame,
+                    										  &mbAbortBA,
+                    										  mpCurrentKeyFrame->GetMap(),
+                    										  num_FixedKF_BA,
+                    										  num_OptKF_BA,
+                    										  num_MPs_BA,
+                    										  num_edges_BA);
+                    	} else {
+            */
+                        Optimizer::LocalBundleAdjustment(mpCurrentKeyFrame,
+                        								 &mbAbortBA, 
+                        								 mpCurrentKeyFrame->GetMap(),
+                        								 num_FixedKF_BA,
+                        								 num_OptKF_BA,
+                        								 num_MPs_BA,
+                        								 num_edges_BA);
+            //            }
+                        
                         b_doneLBA = true;
                     }
 
@@ -247,7 +300,54 @@ void LocalMapping::Run()
             vdKFCullingSync_ms.push_back(timeKFCulling_ms);
 #endif
 
+			// Object-SLAM : send keyframe to object processing thread
+			//if (mpSystem->_use_python)
+			//mpObjectMapper->InsertKeyFrame(mpCurrentKeyFrame);
+			
+			// Object-SLAM
+			if (mpSystem->_use_python && mpTracker->mState == Tracking::OK)
+			{
+				// --- Stereo mode ---
+				if (mpTracker->mSensor == System::STEREO || mpTracker->mSensor == System::IMU_STEREO)
+				{
+					if (mpSystem->HasLiDAR())
+					{
+						GetNewObservations();
+						MapObjectCulling();
+						CreateNewMapObjects();
+					}
+					else
+					{
+						/* not implemented yet */
+					}
+				}
+				
+				// --- Monocular mode ---
+				else if (mpTracker->mSensor == System::MONOCULAR || mpTracker->mSensor == System::IMU_MONOCULAR)
+				{
+					if (mpSystem->HasLiDAR())
+					{
+						//GetNewObservations();
+						//MapObjectCulling();
+						//CreateNewMapObjects();
+					}
+					else
+					{
+						if (mpAtlas->GetAllMapObjects().empty())
+							CreateNewObjectsFromDetections();
+						ProcessDetectedObjects();
+					}
+				}
+
+				if (!stopRequested())
+					mbAbortBA = false;
+			}
+            
+
             mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);
+            
+            // Object-SLAM (its not clear if this is even needed)
+            //mpLastKeyFrame = mpCurrentKeyFrame;
 
 #ifdef REGISTER_TIMES
             std::chrono::steady_clock::time_point time_EndLocalMap = std::chrono::steady_clock::now();
@@ -1110,6 +1210,12 @@ void LocalMapping::ResetIfRequested()
             mlpRecentAddedMapPoints.clear();
             mbResetRequested = false;
             mbResetRequestedActiveMap = false;
+            
+            // Object-SLAM
+            mlpRecentAddedMapObjects.clear();
+            std::vector<MapObject*> pMOs = mpAtlas->GetAllMapObjects();
+            for(MapObject* pMO : pMOs)
+            	mpAtlas->EraseMapObject(pMO);
 
             // Inertial parameters
             mTinit = 0.f;
@@ -1127,6 +1233,12 @@ void LocalMapping::ResetIfRequested()
             cout << "LM: Reseting current map in Local Mapping..." << endl;
             mlNewKeyFrames.clear();
             mlpRecentAddedMapPoints.clear();
+            
+            // Object-SLAM
+            mlpRecentAddedMapObjects.clear();
+            std::vector<MapObject*> pMOs = mpAtlas->GetAllMapObjects();
+            for(MapObject* pMO : pMOs)
+            	mpAtlas->EraseMapObject(pMO);
 
             // Inertial parameters
             mTinit = 0.f;

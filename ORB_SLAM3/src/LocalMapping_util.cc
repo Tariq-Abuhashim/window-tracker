@@ -24,17 +24,13 @@ namespace ORB_SLAM3
  */
 void LocalMapping::MapObjectCulling()
 {
-	const long int nCurrentKFid = static_cast<long int>(mpCurrentKeyFrame->mnId);
-    	const int KF_LIFETIME_THRESHOLD = 2;      // Threshold for keyframe lifetime
-    	const int OBSERVATION_THRESHOLD = 1;      // Minimum observations required
-    
     // Check Recent Added MapObjects
     list<MapObject*>::iterator lit = mlpRecentAddedMapObjects.begin();
-    //const unsigned long int nCurrentKFid = mpCurrentKeyFrame->mnId;
+    const unsigned long int nCurrentKFid = mpCurrentKeyFrame->mnId;
 
-    //const int cnThObs = 1;  // FIXME
-
-	Map* pCurrentMap = mpAtlas->GetCurrentMap();
+    const int cnThObs = 2;
+    
+    Map* mpMap = mpAtlas->GetCurrentMap();
 
     // Treat static and dynamic objects differently
     while(lit != mlpRecentAddedMapObjects.end())
@@ -42,11 +38,11 @@ void LocalMapping::MapObjectCulling()
         MapObject* pMO = *lit;
         if (pMO->isDynamic())
         {
-            if ( nCurrentKFid - static_cast<long int>(pMO->mpNewestKF->mnId) >= KF_LIFETIME_THRESHOLD)
+            if ((int) nCurrentKFid - (int) pMO->mpNewestKF->mnId  >= 2)
             {
                 pMO->SetBadFlag();
-                //lit = mlpRecentAddedMapObjects.erase(lit); // FIXME Tariq: this will result in two objects getting removed
-                pCurrentMap->mnDynamicObj--;
+                lit = mlpRecentAddedMapObjects.erase(lit); // FIXME is this removing a second objects?
+                mpMap->mnDynamicObj--;
             }
         }
 
@@ -54,27 +50,30 @@ void LocalMapping::MapObjectCulling()
         {
             lit = mlpRecentAddedMapObjects.erase(lit);
         }
-        else if( nCurrentKFid - static_cast<long int>(pMO->mnFirstKFid) >= KF_LIFETIME_THRESHOLD && pMO->Observations() <= OBSERVATION_THRESHOLD) // 2 and 1
+        else if(((int)nCurrentKFid-(int)pMO->mnFirstKFid) >= 2 && pMO->Observations() <= cnThObs)
         {
             pMO->SetBadFlag();
             lit = mlpRecentAddedMapObjects.erase(lit);
         }
-        else if( nCurrentKFid - static_cast<long int>(pMO->mnFirstKFid) >= KF_LIFETIME_THRESHOLD+1) // 3
+        else if(((int)nCurrentKFid-(int)pMO->mnFirstKFid) >= 3)
             lit = mlpRecentAddedMapObjects.erase(lit);
         else
             lit++;
     }
 
     // Dynamic objects that aren't recently added
-    if (pCurrentMap->mnDynamicObj > 0)
+    if (mpMap->mnDynamicObj > 0)
     {
-        std::vector<MapObject*> pMOs = mpAtlas->GetAllMapObjects();
+        std::vector<MapObject*> pMOs = mpMap->GetAllMapObjects();
         for (MapObject *pMO : pMOs)
         {
-            if (pMO->isDynamic() && nCurrentKFid - static_cast<long int>(pMO->mpNewestKF->mnId) >= KF_LIFETIME_THRESHOLD)
+            if (pMO->isDynamic())
             {
-				pMO->SetBadFlag();
-				pCurrentMap->mnDynamicObj--;
+                if ((int) nCurrentKFid - (int) pMO->mpNewestKF->mnId  >= 2)
+                {
+                    pMO->SetBadFlag();
+                    mpMap->mnDynamicObj--;
+                }
             }
         }
     }
@@ -86,7 +85,7 @@ void LocalMapping::GetNewObservations()
 
     // cout << "LocalMapping: Estimating new poses for associated objects" << endl;
 
-    auto Tcw = Converter::toMatrix4f(mpCurrentKeyFrame->GetPose());
+    Eigen::Matrix4f Tcw = (mpCurrentKeyFrame->GetPose()).matrix().cast<float>(); // Sophus::SE3f to Eigen::Matrix4f
     auto mvpAssociatedObjects = mpCurrentKeyFrame->GetMapObjectMatches();
     auto mvpObjectDetections = mpCurrentKeyFrame->GetObjectDetections();
 
@@ -163,8 +162,9 @@ void LocalMapping::CreateNewMapObjects()
 
     // cout << "LocalMapping: Started new objects creation" << endl;
 
-    auto SE3Twc = Converter::toMatrix4f(mpCurrentKeyFrame->GetPoseInverse());
+    Eigen::Matrix4f SE3Twc = (mpCurrentKeyFrame->GetPoseInverse()).matrix().cast<float>();
     auto mvpObjectDetections = mpCurrentKeyFrame->GetObjectDetections();
+    
 	if (mvpObjectDetections.empty())
 	{
 		cout << "    No object detections available. Returning." << endl;
@@ -195,6 +195,7 @@ void LocalMapping::CreateNewMapObjects()
 			cout << "    Skipping detection that is not new." << endl;
 		        continue;
 		}
+		
 		auto pyMapObject = pyOptimizer.attr("reconstruct_object")
 		        (det->Sim3Tco, det->SurfacePoints, det->RayDirections, det->DepthObs);
 		if (!pyMapObject.attr("is_good").cast<bool>())
@@ -210,11 +211,13 @@ void LocalMapping::CreateNewMapObjects()
 			return;
 		}
 
+
+
 		auto Sim3Tco = pyMapObject.attr("t_cam_obj").cast<Eigen::Matrix4f>();
 		det->SetPoseMeasurementSim3(Sim3Tco);
 		// Sim3, SE3, Sim3
 		Eigen::Matrix4f Sim3Two = SE3Twc * Sim3Tco;
-		auto code = pyMapObject.attr("code").cast<Eigen::VectorXf>(); // was Eigen::Vector<float, 64>
+		auto code = pyMapObject.attr("code").cast<Eigen::VectorXf>(); // was Eigen::Vector <float, 64> or <float, 32>
 		auto pNewObj = new MapObject(Sim3Two, code, det->Box, mpCurrentKeyFrame, pCurrentMap);
 
         auto pyMesh = pyMeshExtractor.attr("extract_mesh_from_code")(code);
@@ -222,10 +225,12 @@ void LocalMapping::CreateNewMapObjects()
         pNewObj->faces = pyMesh.attr("faces").cast<Eigen::MatrixXi>();
 
 		pNewObj->AddObservation(mpCurrentKeyFrame, i);
-		mpCurrentKeyFrame->AddMapObject(pNewObj, i);
+		
+/*		mpCurrentKeyFrame->AddMapObject(pNewObj, i);
 		pCurrentMap->AddMapObject(pNewObj);
 		mpObjectDrawer->AddObject(pNewObj);
 		mlpRecentAddedMapObjects.push_back(pNewObj);
+*/
 				
 		//count++;
 	}
@@ -239,8 +244,8 @@ void LocalMapping::CreateNewObjectsFromDetections()
 {
     // cout << "LocalMapping: Started new objects creation" << endl;
 
-    cv::Mat Rcw = mpCurrentKeyFrame->GetRotation();
-    cv::Mat tcw = mpCurrentKeyFrame->GetTranslation();
+    Eigen::Matrix3f Rcw = mpCurrentKeyFrame->GetRotation();
+    Eigen::Vector3f tcw = mpCurrentKeyFrame->GetTranslation();
     auto mvpObjectDetections = mpCurrentKeyFrame->GetObjectDetections();
 
 	Map* pCurrentMap = mpAtlas->GetCurrentMap();
@@ -282,10 +287,10 @@ void LocalMapping::CreateNewObjectsFromDetections()
 
 void LocalMapping::ProcessDetectedObjects()
 {
-    auto SE3Twc = Converter::toMatrix4f(mpCurrentKeyFrame->GetPoseInverse());
-    auto SE3Tcw = Converter::toMatrix4f(mpCurrentKeyFrame->GetPose());
-    cv::Mat Rcw = mpCurrentKeyFrame->GetRotation();
-    cv::Mat tcw = mpCurrentKeyFrame->GetTranslation();
+    Eigen::Matrix4f SE3Twc = (mpCurrentKeyFrame->GetPoseInverse()).matrix().cast<float>(); // Sophus::SE3f to Eigen::Matrix4f;
+    Eigen::Matrix4f SE3Tcw = (mpCurrentKeyFrame->GetPose()).matrix().cast<float>(); // Sophus::SE3f to Eigen::Matrix4f;
+    Eigen::Matrix3f Rcw = mpCurrentKeyFrame->GetRotation();
+    Eigen::Vector3f tcw = mpCurrentKeyFrame->GetTranslation();
     auto mvpObjectDetections = mpCurrentKeyFrame->GetObjectDetections();
     auto mvpAssociatedObjects = mpCurrentKeyFrame->GetMapObjectMatches();
 
@@ -365,21 +370,15 @@ void LocalMapping::ProcessDetectedObjects()
             int p_i = 0;
             for (auto pMP : points_on_object)
             {
-                if (!pMP)
-                    continue;
-                if (pMP->isBad())
-                    continue;
-                if (pMP->isOutlier())
-                    continue;
+                if (!pMP) continue;
+                if (pMP->isBad()) continue;
+                if (pMP->isOutlier()) continue;
 
-                cv::Mat x3Dw = pMP->GetWorldPos();
-                cv::Mat x3Dc = Rcw * x3Dw + tcw;
-                float xc = x3Dc.at<float>(0);
-                float yc = x3Dc.at<float>(1);
-                float zc = x3Dc.at<float>(2);
-                surface_points_cam(p_i, 0) = xc;
-                surface_points_cam(p_i, 1) = yc;
-                surface_points_cam(p_i, 2) = zc;
+                Eigen::Vector3f x3Dw = pMP->GetWorldPos();
+                Eigen::Vector3f x3Dc = Rcw * x3Dw + tcw; // camera coordinates
+                surface_points_cam(p_i, 0) = x3Dc(0);
+                surface_points_cam(p_i, 1) = x3Dc(1);
+                surface_points_cam(p_i, 2) = x3Dc(2);
                 p_i++;
             }
 
@@ -399,9 +398,9 @@ void LocalMapping::ProcessDetectedObjects()
                 if (pMP->isOutlier())
                     continue;
 
-                cv::Mat x3Dw = pMP->GetWorldPos();
-                cv::Mat x3Dc = Rcw * x3Dw + tcw;
-                depth_obs(k_i) = x3Dc.at<float>(2);
+                Eigen::Vector3f x3Dw = pMP->GetWorldPos();
+                Eigen::Vector3f x3Dc = Rcw * x3Dw + tcw;
+                depth_obs(k_i) = x3Dc(2);
                 ray_pixels(k_i, 0) = mpCurrentKeyFrame->mvKeysUn[point_idx].pt.x;
                 ray_pixels(k_i, 1 ) = mpCurrentKeyFrame->mvKeysUn[point_idx].pt.y;
                 k_i++;
@@ -409,15 +408,27 @@ void LocalMapping::ProcessDetectedObjects()
 
             Eigen::MatrixXf u_hom(n_rays, 3);
             u_hom << ray_pixels, Eigen::MatrixXf::Ones(n_rays, 1);
+            
+            // backproject rays in camera frame
             Eigen::MatrixXf fg_rays(n_rays, 3);
             Eigen::Matrix3f invK = Converter::toMatrix3f(mpTracker->GetCameraIntrinsics()).inverse();
             for (int i = 0; i  < n_rays; i++)
             {
-                auto x = u_hom.row(i).transpose();
+                Eigen::Vector3f x = u_hom.row(i).transpose(); // [u, v, 1]
                 fg_rays.row(i) = (invK * x).transpose();
             }
-            Eigen::MatrixXf rays(fg_rays.rows() + det->background_rays.rows(), 3);
-            rays << fg_rays, det->background_rays;
+            
+            // combine background rays (if any)
+            Eigen::MatrixXf rays;
+            if (det->background_rays.rows() == 0)
+            {
+            	rays = fg_rays;
+            }
+            else
+            {
+            	rays.resize(fg_rays.rows() + det->background_rays.rows(), 3);
+            	rays << fg_rays, det->background_rays;
+            }
 
             PyThreadStateLock PyThreadLock;
             auto pyMapObject = pyOptimizer.attr("reconstruct_object")

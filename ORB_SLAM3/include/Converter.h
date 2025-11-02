@@ -16,6 +16,7 @@
 * If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <GL/glew.h>
 #include <pangolin/pangolin.h> // Object-SLAM
 
 #ifndef CONVERTER_H
